@@ -1,0 +1,31 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "ai-workspace-platform",
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2026-11-11",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist/client",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "ai-workspace-db",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "../../infra/migrations",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "STORAGE",
+      "bucket_name": "ai-workspace-storage",
+    },
+  ],
+  "vars": {
+    "APP_ENV": "development",
+    "WORKERS_PLAN": "free",
+    "ENABLE_PAID_SANDBOX": "false",
+  },
+}

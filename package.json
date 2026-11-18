@@ -1,0 +1,47 @@
+{
+  "name": "ai-workspace-platform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.34.5",
+  "scripts": {
+    "dev": "pnpm --filter @ai-workspace/web dev",
+    "dev:desktop": "pnpm --filter @ai-workspace/desktop dev",
+    "build": "pnpm -r --if-present build",
+    "build:desktop": "pnpm --filter @ai-workspace/desktop build",
+    "package:win": "pnpm --filter @ai-workspace/desktop package:win",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "vitest run",
+    "test:unit": "vitest run packages/",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "playwright test",
+    "test:watch": "vitest",
+    "db:migrate:local": "CI=1 pnpm --filter @ai-workspace/web exec wrangler d1 migrations apply ai-workspace-db --local"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "@playwright/test": "^1.56.1",
+    "@types/node": "^22.19.0",
+    "eslint": "^9.39.1",
+    "eslint-config-prettier": "^10.1.0",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^17.14.0",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.46.3",
+    "vitest": "^4.0.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd",
+      "@cloudflare/workerd-linux-64",
+      "electron",
+      "electron-winstaller"
+    ]
+  }
+}

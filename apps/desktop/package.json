@@ -1,0 +1,52 @@
+{
+  "name": "@ai-workspace/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/electron/main.cjs",
+  "scripts": {
+    "dev": "vite",
+    "build:renderer": "vite build",
+    "build:electron": "tsup --config tsup.config.ts",
+    "build": "pnpm run build:renderer && pnpm run build:electron",
+    "package:win": "pnpm run build && electron-builder --config electron-builder.yml --win nsis --publish never",
+    "package:win:zip": "pnpm run build && electron-builder --config electron-builder.yml --win zip --publish never",
+    "package:dir": "pnpm run build && electron-builder --config electron-builder.yml --dir --publish never",
+    "typecheck": "tsc -p tsconfig.renderer.json --noEmit && tsc -p tsconfig.electron.json --noEmit"
+  },
+  "dependencies": {
+    "@ai-workspace/agent-core": "workspace:*",
+    "@ai-workspace/chat-core": "workspace:*",
+    "@ai-workspace/contracts": "workspace:*",
+    "@ai-workspace/database": "workspace:*",
+    "@ai-workspace/desktop-storage": "workspace:*",
+    "@ai-workspace/local-executor": "workspace:*",
+    "@ai-workspace/model-registry": "workspace:*",
+    "@ai-workspace/providers": "workspace:*",
+    "@ai-workspace/shared": "workspace:*",
+    "@ai-workspace/ui": "workspace:*",
+    "katex": "^0.16.25",
+    "lucide-react": "^0.553.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.17",
+    "@types/node": "^22.19.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "electron": "^45.3.4",
+    "electron-builder": "^26.18.0",
+    "tailwindcss": "^4.1.17",
+    "tsup": "^8.5.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
+  }
+}

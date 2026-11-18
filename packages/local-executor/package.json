@@ -1,0 +1,23 @@
+{
+  "name": "@ai-workspace/local-executor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ai-workspace/agent-core": "workspace:*",
+    "@ai-workspace/contracts": "workspace:*",
+    "@ai-workspace/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "typescript": "^5.9.3"
+  }
+}

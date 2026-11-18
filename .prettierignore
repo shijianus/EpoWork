@@ -1,0 +1,9 @@
+dist/
+release/
+.wrangler/
+node_modules/
+coverage/
+pnpm-lock.yaml
+CHECKLIST.log
+CHECKIST.log
+*.tsbuildinfo

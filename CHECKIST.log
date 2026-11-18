@@ -1,0 +1,7 @@
+# Compatibility Entrypoint
+
+本文件仅作为兼容指定文件名 (`CHECKIST.log`) 的入口文件。
+
+**唯一正式任务清单与进度来源**：请读取并维护 [CHECKLIST.log](./CHECKLIST.log)。
+
+不得在本文件中维护独立任务状态。一切任务状态、验收标准与进度记录以 `CHECKLIST.log` 为准。

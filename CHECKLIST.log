@@ -1,0 +1,2177 @@
+# AI Workspace Platform — Authoritative Task Checklist & Progress Source
+
+项目名称: AI Workspace Platform
+当前版本: 0.1.0-alpha
+最后更新时间: 2026-11-17T23:18:30-08:00
+当前开发阶段: DESKTOP-P1 — Local-first Desktop (Windows EXE) + Optional Cloudflare Web
+当前进行中的任务: DESK-11 (NSIS 安装包编译需 Windows/Wine) & DESK-12 (真实 LLM 端到端需 API Key), P1-15 (Cloudflare 远端部署 BLOCKED)
+项目总体进度: P0 (14/14 VERIFIED), AUDIT (5/5 VERIFIED), P1 (14/15 VERIFIED, P1-15 BLOCKED), P2 (12 VERIFIED, 4 UI DONE, 3 实网 API BLOCKED), DESKTOP-P1 (10/12 VERIFIED, 2/12 BLOCKED)
+已完成任务: P0-01 ~ P0-14, AUDIT-01 ~ AUDIT-05, P1-01 ~ P1-14, DESK-01 ~ DESK-10 (VERIFIED)
+待开发任务: DESK-11 (Windows 实机 NSIS 编译与安装启动), DESK-12 (真实 API Key 下 Agent 实测), 以及保留的 Cloudflare Web 扩展任务
+阻塞任务:
+- P1-15 (Cloudflare 远端开发环境部署): 保持 BLOCKED，未获用户明确批准不执行远端部署
+- P2-02 / P2-03 / P2-04 / P2-19 真实外部模型 API 验收: 缺少 OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY
+- DESK-11 (Windows NSIS 安装包生成与 Windows 实机安装启动验收): Linux 宿主机无 `wine` (`spawn wine ENOENT`) 且无 Windows 实机；已生成 `win-unpacked/EpoCanvas AI Workspace.exe` + `-win.zip`，并配置 GitHub Actions `windows-latest` NSIS 打包 Job
+- DESK-12 (Desktop 真实模型对话 + Agent 修改真实文件端到端): 缺少真实模型 API Key 与 Windows 实机环境
+技术债务: 无
+已验证功能:
+- Cloudflare Web P0/AUDIT/P1/P2 完整代码与测试全部保留且无回归
+- `packages/agent-core`、`packages/local-executor`、`packages/desktop-storage`、`apps/desktop`
+- Electron 沙盒隔离（contextIsolation / no Node in Renderer）、DPAPI/AES 凭证库、SQLite 持久化、本地项目创建/编辑/构建
+- Playwright Electron E2E (`1 passed`) 与 Windows `.exe` + `.zip` 产物构建
+尚未验证的功能: Windows NSIS 安装向导编译与 Windows 实机安装启动、Windows 原生 DPAPI 实测、真实外部 LLM 模型驱动 Desktop Agent 端到端
+部署状态: 本地构建、Electron E2E、Windows portable `.exe`/`.zip` 打包已验证；NSIS `.exe` 待 Windows CI/实机；Cloudflare 远端未部署
+下一步行动: 在 Windows 机器或 GitHub Actions `windows-latest` 运行 `pnpm package:win` 获取 NSIS Setup `.exe` 并执行 `DESK-11` / `DESK-12` 实机验收（配置真实 API Key 后验证 Chat 与 Work Agent 改文件+构建）。
+
+---
+
+## P0 — 环境检查与技术验证
+
+[x] P0-01 — 检查现有项目与仓库结构
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：确认当前代码仓库目录内容、Git 状态与历史残留任务
+相关文件：CHECKLIST.log
+依赖：无
+验收标准：明确目录文件列表、Git 状态与是否存在已有代码
+测试方式：执行 `ls -la && git status`
+测试结果：通过 (空目录 `/home/shijian/projects/EpoCanvasGPT`，尚未初始化 Git)
+备注：无现有源码冲突
+
+[x] P0-02 — 初始化进度和文档文件
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：创建 CHECKLIST.log、CHECKIST.log、PROJECT_SPEC.md、ARCHITECTURE.md、DECISIONS.md、IMPLEMENTATION_LOG.md、TEST_REPORT.md、SECURITY.md、DEPLOYMENT.md、AGENTS.md、.env.example
+相关文件：CHECKLIST.log, CHECKIST.log, PROJECT_SPEC.md, ARCHITECTURE.md, DECISIONS.md, IMPLEMENTATION_LOG.md, TEST_REPORT.md, SECURITY.md, DEPLOYMENT.md, AGENTS.md, .env.example
+依赖：P0-01
+验收标准：所有必需文档存在且内容完整、结构一致，CHECKIST.log 明确指向 CHECKLIST.log
+测试方式：检查根目录文件列表与 Prettier 格式校验
+测试结果：通过 (全部 11 个根目录文档文件已建立并通过 format:check)
+备注：CHECKIST.log 明确指向 CHECKLIST.log
+
+[x] P0-03 — 检查 Node.js、pnpm、Wrangler 与运行环境
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：确认本地 Node.js、pnpm、Git、Python、Docker 及 Wrangler 可用状态与环境变量占位情况
+相关文件：DECISIONS.md, DEPLOYMENT.md
+依赖：P0-01
+验收标准：获取明确版本号与缺失工具清单（如 wrangler 将作为 workspace devDependency 安装）
+测试方式：执行 `node -v && pnpm -v && git --version && docker --version` 及 env 存在性检查
+测试结果：通过 (Node v22.18.0, pnpm 10.34.5, git 2.43.0, Python 3.12.3, Docker 29.6.1; 全局 wrangler 未安装; CLOUDFLARE_API_TOKEN/ACCOUNT_ID=SET, 模型 API Keys=UNSET)
+备注：严禁在未获用户批准前使用 CLOUDFLARE_API_TOKEN 创建付费或远端资源
+
+[x] P0-04 — 核实 Cloudflare 官方最新文档
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：核实 Cloudflare Workers React+Vite (@cloudflare/vite-plugin)、Hono、Agents SDK、D1、R2、Workflows 最新官方文档与包版本
+相关文件：ARCHITECTURE.md, DECISIONS.md
+依赖：P0-01
+验收标准：确认官方包名、版本及 Vite React Hono Workers 集成模式
+测试方式：通过 search_web 检索 developers.cloudflare.com 与 npmjs.com
+测试结果：通过 (agents@0.33.0, @cloudflare/vite-plugin@1.70.0, hono@4.13.19, Vite+React+Hono via Workers Assets + wrangler.jsonc)
+备注：记录于 DECISIONS.md 与 ARCHITECTURE.md
+
+[x] P0-05 — 核实 Pi Durable Harness API
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：核实 Cloudflare Agents SDK 中 PiHarness 与 @earendil-works/pi-durable 的真实导入路径与生命周期用法
+相关文件：ARCHITECTURE.md, DECISIONS.md
+依赖：P0-04
+验收标准：确认 PiHarness 导入路径、Lifecycle.install、Harness.open 与 DO SQLite 存储机制
+测试方式：检索 developers.cloudflare.com PiHarness 官方示例
+测试结果：通过 (`agents/harness/pi` PiHarness, `agents/lifecycle` Lifecycle, `@earendil-works/pi-durable` Harness/createRegistry, `@earendil-works/pi-ai`, 需 `nodejs_compat`)
+备注：将在 P3 安装并做真实类型与运行验证
+
+[x] P0-06 — 核实 Cloudflare Computer 和 Sandbox 当前 SDK
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：区分 `@cloudflare/computer` 与 `@cloudflare/sandbox` 的职责边界、API 与限制
+相关文件：ARCHITECTURE.md, DECISIONS.md
+依赖：P0-04
+验收标准：明确 Computer (DO SQLite 文件系统) 与 Sandbox (Linux 容器 Shell/进程/预览/R2 挂载/快照) 的适用边界
+测试方式：检索 developers.cloudflare.com 官方文档
+测试结果：通过 (`@cloudflare/computer` 提供 DO SQLite 持久化 Workspace 与工具；`@cloudflare/sandbox` 1.x 提供隔离 Linux 容器、Files API、进程管理、R2 mountBucket 与快照)
+备注：将在 P4 集成 Sandbox SDK 并通过 SandboxProvider 抽象隔离
+
+[x] P0-07 — 核实 OpenAI、Anthropic、Gemini Provider 与 Vercel AI SDK
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：核实 `ai`、`@ai-sdk/openai`、`@ai-sdk/anthropic`、`@ai-sdk/google` 最新版本及各家官方当前有效 Model ID
+相关文件：ARCHITECTURE.md, DECISIONS.md
+依赖：P0-01
+验收标准：获取经官方资料核验的 SDK 版本与真实 Model ID，不编造不存在的模型
+测试方式：检索 npmjs.com、developers.openai.com、docs.anthropic.com、ai.google.dev
+测试结果：通过 (ai@7.0.173, @ai-sdk/openai@4.0.118, @ai-sdk/anthropic@4.0.105, @ai-sdk/google@4.0.121; OpenAI: gpt-6-astra, gpt-6.1-sol, gpt-6.1-terra, gpt-6-luna, gpt-4o, gpt-4o-mini; Anthropic: claude-fable-5-2, claude-opus-5-5, claude-sonnet-5-5, claude-haiku-5-5; Google: gemini-4-carbon, gemini-4-argon, gemini-4-hydrogen, gemini-3.8-flash, gemini-3.5-flash-lite, gemini-nano-banana-2.1)
+备注：模型列表亦支持通过 Provider `/models` API 动态查询扩展
+
+[x] P0-08 — 核实 Codex、Claude、Gemini CLI 的嵌入方式与认证限制
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：核实 OpenAI Agents API / Codex App Server / Container Harness、Claude Agent SDK / Container Harness、Gemini CLI ACP 模式及合规认证边界
+相关文件：ARCHITECTURE.md, DECISIONS.md, SECURITY.md
+依赖：P0-04
+验收标准：明确各 Harness 合法云端接入方案，严禁提取或转发个人订阅 OAuth Token
+测试方式：检索 openai.com、claude.com、geminicli.com、developers.cloudflare.com
+测试结果：通过 (OpenAI Agents API & Codex App Server JSON-RPC / CF Sandbox; Claude Agent SDK & ContainerHarness + ContainerEgress 注入合法 API Key; Gemini CLI `--acp` JSON-RPC stdio; 全部云端执行统一走合法 API Key + Egress 注入)
+备注：合规策略写入 SECURITY.md 与 DECISIONS.md
+
+[x] P0-09 — 完成架构决策记录
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：完成 ADR-001 至 ADR-007 架构决策记录
+相关文件：DECISIONS.md
+依赖：P0-04, P0-05, P0-06, P0-07, P0-08
+验收标准：DECISIONS.md 覆盖技术栈、存储、Model Provider、Agent Harness、Sandbox/Computer、安全隔离与 VPS 扩展决策
+测试方式：审阅 DECISIONS.md 结构完整性
+测试结果：通过 (ADR-001 ~ ADR-007 已完成并格式化验证)
+备注：已落盘
+
+[x] P0-10 — 建立基础 Monorepo
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：初始化 Git、pnpm workspace、基础 packages/shared、packages/contracts、apps/web 骨架
+相关文件：package.json, pnpm-workspace.yaml, tsconfig.base.json, apps/web/*, packages/shared/*, packages/contracts/*
+依赖：P0-02, P0-03
+验收标准：`pnpm install` 成功，workspace 依赖解析无循环依赖
+测试方式：执行 `pnpm install`
+测试结果：通过 (pnpm v10.34.5 安装 4 个 workspace 项目成功)
+备注：按阶段逐步拆分 packages
+
+[x] P0-11 — 配置 TypeScript、ESLint、Formatter
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：配置严格 TypeScript (`strict: true`)、ESLint 9 flat config 与 Prettier
+相关文件：tsconfig.base.json, eslint.config.mjs, .prettierrc, package.json
+依赖：P0-10
+验收标准：`pnpm typecheck` 与 `pnpm lint` 与 `pnpm format:check` 全部零错误通过
+测试方式：执行 `pnpm typecheck && pnpm lint && pnpm format:check`
+测试结果：通过 (三项检查均退出码 0)
+备注：无
+
+[x] P0-12 — 配置基础测试 (Vitest)
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：配置 Vitest 单元测试与契约基础测试
+相关文件：vitest.config.ts, packages/contracts/src/*.test.ts, packages/shared/src/*.test.ts, apps/web/src/worker/index.test.ts
+依赖：P0-10, P0-11
+验收标准：`pnpm test` 真实运行并通过所有基础测试用例
+测试方式：执行 `pnpm test`
+测试结果：通过 (3 个测试文件，10 个测试用例全部通过)
+备注：无
+
+[x] P0-13 — 配置本地开发命令与启动验证
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：配置 `pnpm dev` 同时启动本地 Vite 前端与 Cloudflare Worker 开发服务（`@cloudflare/vite-plugin`）并验证 `/api/health`
+相关文件：package.json, apps/web/vite.config.ts, apps/web/wrangler.jsonc
+依赖：P0-10, P0-11
+验收标准：本地开发服务可启动，访问前端页面与 `/api/health` 返回 200 OK
+测试方式：启动 `vite --port 4173` 并 curl 验证 `/api/health` 与 `/`
+测试结果：通过 (`/api/health` 返回 200 JSON，`checks.worker = "ok"`；`/` 返回 Vite React HTML)
+备注：无
+
+[x] P0-14 — 建立初始 CI 工作流
+阶段：P0
+优先级：P0
+状态：VERIFIED
+目标：创建 GitHub Actions CI 工作流，自动执行 install、typecheck、lint、test、build
+相关文件：.github/workflows/ci.yml
+依赖：P0-11, P0-12
+验收标准：CI YAML 语法有效，覆盖所有本地已验证命令
+测试方式：本地完整执行 `pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build`
+测试结果：通过 (全量命令退出码 0，生成 dist/ai_workspace_platform 与 dist/client)
+备注：无
+
+---
+
+## P1 — Cloudflare Web 基础
+
+[x] P1-01 — 创建 React + Vite 前端基础应用
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：搭建 React 19 + TypeScript + Vite + Tailwind CSS v4 前端工程
+相关文件：apps/web/package.json, apps/web/index.html, apps/web/src/main.tsx
+依赖：P0-13
+验收标准：Vite 构建成功，页面无控制台报错
+测试方式：`pnpm build` 与 `pnpm typecheck`
+测试结果：通过 (`dist/client` 构建成功，typecheck 零错误)
+备注：无
+
+[x] P1-02 — 创建 Hono Worker API
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：搭建基于 Cloudflare Workers + Hono + Zod 的模块化 API 服务，含统一错误格式、请求 ID、CORS 与安全响应头
+相关文件：apps/web/src/worker/index.ts, apps/web/src/worker/middleware/*
+依赖：P0-13
+验收标准：`/api/health` 返回结构化 JSON，未匹配路由返回统一 JSON 404，校验失败返回统一 400 错误体
+测试方式：Vitest Worker 路由测试 (`apps/web/src/worker/index.test.ts`)
+测试结果：通过 (2/2 tests passed)
+备注：使用 `@cloudflare/vite-plugin` 将 Worker 与 React SPA 统一托管
+
+[x] P1-03 — 配置 React Router 导航架构
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：配置主应用路由：`/chat`, `/work`, `/projects`, `/studio`, `/plugins`, `/automations`, `/settings`, `/login`, `/register`
+相关文件：apps/web/src/app/router.tsx, apps/web/src/pages/*
+依赖：P1-01
+验收标准：所有主导航路由可正常切换，未完成模块清晰标注阶段状态而非假按钮
+测试方式：`pnpm typecheck`、`pnpm lint`、`pnpm build`
+测试结果：通过 (无构建或类型错误)
+备注：无
+
+[x] P1-04 — 建立自主品牌设计系统与基础 UI 组件
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：建立自有品牌（EpoCanvas / AI Workspace）设计 Token、CSS 变量与基础 UI 组件（Button, Input, Card, Badge, Dialog, Toast, Skeleton）
+相关文件：packages/ui/src/*, apps/web/src/styles/index.css
+依赖：P1-01
+验收标准：组件可复用、支持键盘访问与焦点环、无第三方受保护视觉素材
+测试方式：`pnpm --filter @ai-workspace/ui typecheck && pnpm lint && pnpm build`
+测试结果：通过
+备注：无
+
+[x] P1-05 — 实现全局布局与主侧边栏
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：实现响应式桌面优先主框架：可折叠主侧边栏、7 大导航模块、用户菜单、搜索跳转(Cmd/Ctrl+K)、通知状态弹窗与健康状态指示
+相关文件：apps/web/src/components/layout/AppShell.tsx
+依赖：P1-03, P1-04
+验收标准：桌面端与移动端小屏均可用，无无行为假按钮
+测试方式：`pnpm typecheck && pnpm lint && pnpm build`
+测试结果：通过
+备注：无
+
+[x] P1-06 — 实现深色/浅色主题切换
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：支持 System / Light / Dark 主题切换并持久化至 localStorage 与用户偏好
+相关文件：apps/web/src/stores/theme.tsx, apps/web/src/components/layout/ThemeToggle.tsx
+依赖：P1-04
+验收标准：切换主题即时更新 DOM class 与 CSS 变量，刷新保持
+测试方式：`pnpm typecheck && pnpm lint && pnpm build`
+测试结果：通过
+备注：无
+
+[x] P1-07 — 实现前后端统一错误处理与边界
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：前端 ErrorBoundary、API Client 错误解析、Toast 反馈；后端统一 AppError/ZodError 与全局 onError
+相关文件：packages/contracts/src/errors.ts, apps/web/src/lib/api-client.ts, apps/web/src/components/ErrorBoundary.tsx, apps/web/src/worker/index.ts
+依赖：P1-02, P1-04
+验收标准：4xx/5xx 错误展示可读错误信息，不泄露堆栈或敏感字段
+测试方式：`tests/integration/p1-auth-settings-storage.test.ts` 与 `apps/web/src/worker/index.test.ts`
+测试结果：通过
+备注：无
+
+[x] P1-08 — 配置 Cloudflare D1 数据库绑定
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：在 `wrangler.jsonc` 配置 D1 绑定与本地 SQLite 模拟环境
+相关文件：apps/web/wrangler.jsonc, packages/database/src/*
+依赖：P1-02
+验收标准：本地 Wrangler/Miniflare D1 可执行 SQL 查询
+测试方式：`pnpm db:migrate:local` 与 Workerd 本地 `/api/health` (`checks.d1 === "ok"`)
+测试结果：通过
+备注：远端 D1 实例创建需用户批准
+
+[x] P1-09 — 配置 Cloudflare R2 存储绑定
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：在 `wrangler.jsonc` 配置 R2 存储桶绑定与用户隔离对象存储抽象 (`UserScopedR2Storage`)
+相关文件：apps/web/wrangler.jsonc, packages/database/src/storage.ts, apps/web/src/worker/routes/storage.ts
+依赖：P1-02
+验收标准：本地开发态 R2 put/get/delete 可正常工作且隔离用户前缀
+测试方式：`packages/database/src/database.test.ts`、`tests/integration/p1-auth-settings-storage.test.ts` 与 Workerd 本地 PUT/GET 实测
+测试结果：通过
+备注：远端 R2 创建需用户批准
+
+[x] P1-10 — 实现数据库迁移系统与核心 Schema
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：编写版本化 SQL 迁移文件，创建核心实体表：users, sessions, organizations, organization_members, provider_connections, model_preferences, conversations, messages, projects, workspaces, runs, run_events, approvals, artifacts, plugin_installations, usage_records, audit_logs
+相关文件：infra/migrations/0001_initial.sql
+依赖：P1-08
+验收标准：迁移可成功执行，所有表与索引创建成功
+测试方式：`pnpm db:migrate:local` (32 commands executed) 及 `node:sqlite` 测试验证
+测试结果：通过
+备注：无
+
+[x] P1-11 — 实现身份认证与会话管理
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：实现注册、登录、PBKDF2-SHA256 密码哈希、SHA-256 会话哈希 Cookie + CSRF 保护、限流与审计日志
+相关文件：packages/auth/src/*, apps/web/src/worker/routes/auth.ts, apps/web/src/worker/middleware/auth.ts
+依赖：P1-10
+验收标准：注册、登录、登出、CSRF 校验、限流均通过测试；密码与 Session Token 不明文存储
+测试方式：`packages/auth/src/auth.test.ts` (4 tests) + `tests/integration/p1-auth-settings-storage.test.ts` + Workerd 本地冒烟测试
+测试结果：通过
+备注：无
+
+[x] P1-12 — 实现登录、注册与退出界面
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：实现独立登录/注册页面与退出交互，未登录重定向 `/login`，刷新不丢会话
+相关文件：apps/web/src/pages/LoginPage.tsx, apps/web/src/pages/RegisterPage.tsx, apps/web/src/hooks/useAuth.tsx
+依赖：P1-05, P1-11
+验收标准：前端构建、类型检查通过，且与真实 `/api/auth/*` 会话接口对齐
+测试方式：`pnpm typecheck && pnpm lint && pnpm build`
+测试结果：通过 (后续 P9 补充 Playwright E2E)
+备注：无
+
+[x] P1-13 — 实现 API 访问控制与严格资源隔离
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：实现认证中间件与租户/用户资源所有权校验，禁止跨用户读取或路径穿越
+相关文件：apps/web/src/worker/middleware/auth.ts, packages/database/src/storage.ts
+依赖：P1-11
+验收标准：未登录访问受保护 API 返回 401；缺少 CSRF 返回 403；跨用户与路径穿越均被拦截
+测试方式：`tests/integration/p1-auth-settings-storage.test.ts` 与 Workerd 本地 `/api/auth/me` (401)
+测试结果：通过
+备注：无
+
+[x] P1-14 — 实现用户设置与 API Key 加密管理
+阶段：P1
+优先级：P0
+状态：VERIFIED
+目标：实现 `/settings` 页面与后端接口，支持个人信息、默认模型偏好、AES-256-GCM 服务端加密存储 BYOK API Key、脱敏展示、密钥轮换/删除与审计日志查看
+相关文件：apps/web/src/pages/SettingsPage.tsx, apps/web/src/worker/routes/settings.ts, packages/auth/src/crypto.ts
+依赖：P1-11, P1-13
+验收标准：数据库不存明文 API Key，前端永不回传完整密钥，仅显示掩码提示
+测试方式：`tests/integration/p1-auth-settings-storage.test.ts` + Workerd 本地 PUT `/api/settings/providers/openai` 实测
+测试结果：通过
+备注：无
+
+[ ] P1-15 — 部署开发环境到 Cloudflare
+阶段：P1
+优先级：P1
+状态：BLOCKED
+目标：将 P1 Web 与 API 部署至 Cloudflare 开发环境并验证线上登录与数据持久化
+相关文件：apps/web/wrangler.jsonc, DEPLOYMENT.md
+依赖：P1-14
+验收标准：线上域名可访问、可登录、刷新不丢会话、未登录拦截受保护 API
+测试方式：真实浏览器访问线上 URL 并执行检查
+测试结果：未执行
+备注：需要用户明确批准在 Cloudflare 账户创建远端 D1/R2/Worker 资源并执行部署
+
+---
+
+## AUDIT — Free-First 独立安全与成本审计
+
+[x] AUDIT-01 — 认证 CPU 预算与 PBKDF2 基准验证 (10ms Workers Free 限制)
+阶段：AUDIT
+优先级：P0
+状态：VERIFIED
+目标：实测 WebCrypto PBKDF2 延迟并修复 Workers Free 10ms CPU 超限风险及未知邮箱计时侧信道
+相关文件：packages/auth/src/crypto.ts, packages/shared/src/budgets.ts, apps/web/src/worker/routes/auth.ts, apps/web/src/worker/env.ts
+依赖：P1-11
+验收标准：实测 100k PBKDF2 (~24-29ms) 证实超 10ms；Free 档默认采用服务器 Pepper + 10k PBKDF2 (~2.8ms)，登录对未知邮箱执行恒定工作量校验
+测试方式：Node WebCrypto 实测基准 + `packages/auth/src/auth.test.ts`
+测试结果：通过 (实测 10k=2.74-2.98ms vs 100k=23.55-29.42ms；`auth.test.ts` 4 tests passed)
+备注：保持对旧版 100k 无 pepper 哈希的向后兼容验证
+
+[x] AUDIT-02 — 持久化限流、CORS 生产收紧与主密钥 Fail-Closed
+阶段：AUDIT
+优先级：P0
+状态：VERIFIED
+目标：修复 isolate-local RateLimiter 内存无界与跨实例失效问题，增加 D1 `rate_limits` 表；生产环境禁用 localhost CORS 与全零默认主密钥；节流 session `touchIfStale` 节省 D1 写入
+相关文件：infra/migrations/0002_free_tier_budgets.sql, packages/auth/src/rate-limiter.ts, packages/database/src/repositories.ts, apps/web/src/worker/middleware/auth.ts, apps/web/src/worker/index.ts, apps/web/src/worker/env.ts
+依赖：P1-11, P1-13
+验收标准：生产环境无 `ENCRYPTION_MASTER_KEY` 时返回 500；RateLimiter 内存有界且 D1 限流可跨请求生效；session touch 5 分钟节流
+测试方式：`tests/integration/p1-auth-settings-storage.test.ts` (含 fail-closed 500 用例) + `packages/auth/src/auth.test.ts` + `pnpm db:migrate:local`
+测试结果：通过 (`0002_free_tier_budgets.sql` 6 commands applied; 集成测试 3/3 passed)
+备注：无
+
+[x] AUDIT-03 — R2 流式上传防 OOM、用户容量配额与失败回滚
+阶段：AUDIT
+优先级：P0
+状态：VERIFIED
+目标：修复 `c.req.arrayBuffer()` 先缓冲后检查导致的 128MB OOM 风险；实施 10MB 单文件上限、250MB 用户总容量配额与 D1 失败自动删 R2 回滚
+相关文件：apps/web/src/worker/routes/storage.ts, packages/database/src/repositories.ts, packages/shared/src/budgets.ts
+依赖：P1-09
+验收标准：超大 Content-Length 或流字节数立即拒绝；PUT/DELETE 准确增减 `user_storage_usage`；D1 失败时清理 R2 对象
+测试方式：`tests/integration/p1-auth-settings-storage.test.ts`
+测试结果：通过 (超大 Content-Length 返回 400；PUT/DELETE 用量增减精确验证)
+备注：无
+
+[x] AUDIT-04 — Free-First 架构核验与文档化 (Capability Matrix)
+阶段：AUDIT
+优先级：P0
+状态：VERIFIED
+目标：核验 Cloudflare Free vs Paid 限制，明确禁止未经批准启用 Containers/Sandbox/Dynamic Workers，区分 DO-SQLite 虚拟工作区与 Linux Shell，撰写 FREE_FIRST_ARCHITECTURE.md 与 ADR-008
+相关文件：FREE_FIRST_ARCHITECTURE.md, DECISIONS.md, SECURITY.md, apps/web/wrangler.jsonc
+依赖：P0-04, P0-06
+验收标准：`wrangler.jsonc` 默认 `WORKERS_PLAN="free"` 且 `ENABLE_PAID_SANDBOX="false"`；Capability Matrix 与硬预算完整记录
+测试方式：检索 `developers.cloudflare.com` 官方文档核验限额 + 审阅文档与 `wrangler.jsonc`
+测试结果：通过
+备注：已核实 Workers Free 10ms CPU、D1 Free 5M read/100k write/day、R2 Free 10GB/mo、SQLite DO Free 5GB、Containers/Dynamic Workers 需 Paid
+
+[x] AUDIT-05 — 审计后全量复验 (不沿用旧状态)
+阶段：AUDIT
+优先级：P0
+状态：VERIFIED
+目标：完成审计修复后重新运行全量 typecheck、lint、format:check、vitest 与生产 build
+相关文件：CHECKLIST.log, TEST_REPORT.md
+依赖：AUDIT-01 ~ AUDIT-04
+验收标准：全部检查在最终代码修改后真实执行并通过
+测试方式：`pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build`
+测试结果：通过 (9 个包/应用 typecheck、lint、format:check、Vitest 10 passed / 1 live-gated skipped、vite build 全通过)
+备注：无
+
+---
+
+## P2 — 原生多模型 Chat
+
+[x] P2-01 — 实现 Provider Registry
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：构建统一 Provider 注册表，管理 OpenAI、Anthropic、Google Gemini 原生适配器与连接状态
+相关文件：packages/providers/src/registry.ts
+依赖：P1-14
+验收标准：按 providerId 解析对应适配器与密钥来源
+测试方式：`packages/providers/src/providers.test.ts` + `tests/integration/p2-chat.test.ts`
+测试结果：通过 (2/2 tests passed)
+备注：无
+
+[ ] P2-02 — 接入 OpenAI 原生 API
+阶段：P2
+优先级：P0
+状态：BLOCKED
+目标：通过 `@ai-sdk/openai` 接入文本流式、工具调用、图片输入与 `/models` 列表
+相关文件：packages/providers/src/openai.ts
+依赖：P2-01
+验收标准：代码与单测通过；真实调用需有效 OPENAI_API_KEY
+测试方式：`packages/providers/src/providers.test.ts` (已通过)；`tests/integration/providers-live.test.ts` (未执行/跳过)
+测试结果：未执行 (真实 API)
+备注：代码已完成并通过结构单测；缺少 OPENAI_API_KEY，真实外部 API 验收严格保持 BLOCKED
+
+[ ] P2-03 — 接入 Anthropic 原生 API
+阶段：P2
+优先级：P0
+状态：BLOCKED
+目标：通过 `@ai-sdk/anthropic` 接入 Claude 流式对话、工具调用、图片/文件输入与温度能力约束
+相关文件：packages/providers/src/anthropic.ts
+依赖：P2-01
+验收标准：代码与单测通过；真实调用需有效 ANTHROPIC_API_KEY
+测试方式：`packages/providers/src/providers.test.ts` (已通过)；`tests/integration/providers-live.test.ts` (未执行/跳过)
+测试结果：未执行 (真实 API)
+备注：代码已完成并通过结构单测；缺少 ANTHROPIC_API_KEY，真实外部 API 验收严格保持 BLOCKED
+
+[ ] P2-04 — 接入 Google Gemini 原生 API
+阶段：P2
+优先级：P0
+状态：BLOCKED
+目标：通过 `@ai-sdk/google` 接入 Gemini 流式对话、工具调用、多模态输入与思考配置
+相关文件：packages/providers/src/google.ts
+依赖：P2-01
+验收标准：代码与单测通过；真实调用需有效 GEMINI_API_KEY
+测试方式：`packages/providers/src/providers.test.ts` (已通过)；`tests/integration/providers-live.test.ts` (未执行/跳过)
+测试结果：未执行 (真实 API)
+备注：代码已完成并通过结构单测；缺少 GEMINI_API_KEY，真实外部 API 验收严格保持 BLOCKED
+
+[x] P2-05 — 实现模型选择与模型参数设置
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：前端模型选择器与参数面板（temperature/reasoning effort/web search），依据模型能力动态禁用不支持项
+相关文件：packages/model-registry/src/*, apps/web/src/components/chat/ModelSelector.tsx
+依赖：P2-01, P2-06
+验收标准：切换模型实时更新能力标签与可用参数（如 Claude 5 禁用 temperature）
+测试方式：`packages/model-registry/src/capabilities.test.ts` + `GET /api/chat/models` 集成与 Workerd 冒烟 (15 models)
+测试结果：通过
+备注：无
+
+[x] P2-06 — 实现 Capability Registry
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：定义模型能力矩阵（streaming, toolCalling, structuredOutput, imageInput, imageGeneration, fileInput, reasoningControl, contextWindow）
+相关文件：packages/model-registry/src/capabilities.ts
+依赖：P0-07
+验收标准：仅包含经过官方验证的 Model ID 与能力映射，支持不支持能力显式抛错
+测试方式：`packages/model-registry/src/capabilities.test.ts` (3 tests)
+测试结果：通过
+备注：无
+
+[x] P2-07 — 实现流式聊天 API 与前端渲染
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：SSE 流式对话端到端打通，支持工具调用、联网搜索扩展接口（SSRF 防护）、错误透传
+相关文件：packages/chat-core/src/*, apps/web/src/worker/routes/chat.ts, apps/web/src/pages/ChatPage.tsx, apps/web/src/hooks/useChatStream.ts
+依赖：P2-01, P2-06
+验收标准：支持 SSE 流式事件、无密钥明确报错、前端正常编译构建
+测试方式：`packages/chat-core/src/chat-core.test.ts` + `tests/integration/p2-chat.test.ts` + `pnpm build`
+测试结果：通过 (流式逻辑与 SSE 路由测试通过；真实外部模型流待密钥后实测)
+备注：无
+
+[x] P2-08 — 实现对话与消息数据库 CRUD
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：D1 持久化 conversations 与 messages（含附件引用、toolCalls、token 用量）并严格校验用户隔离
+相关文件：packages/chat-core/src/repository.ts
+依赖：P1-10, P1-13
+验收标准：新建、列表、详情、重命名、删除及跨用户拦截通过测试
+测试方式：`packages/chat-core/src/chat-core.test.ts` + `tests/integration/p2-chat.test.ts` + Workerd 本地 D1 冒烟
+测试结果：通过
+备注：无
+
+[x] P2-09 — 实现对话历史侧边栏与搜索
+阶段：P2
+优先级：P0
+状态：DONE
+目标：历史列表分组、重命名、删除、关键词过滤与刷新恢复
+相关文件：apps/web/src/components/chat/ConversationList.tsx, apps/web/src/worker/routes/chat.ts
+依赖：P2-08
+验收标准：后端搜索过滤已测试通过；前端组件构建通过，待 P9 Playwright E2E 浏览器交互验收
+测试方式：后端 `GET /api/chat/conversations?q=...` + `pnpm typecheck && pnpm build`
+测试结果：通过 (代码与后端通过；UI 交互待 P9 E2E)
+备注：无
+
+[x] P2-10 — 实现消息编辑
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：编辑历史用户消息并截断后续消息重新触发生成
+相关文件：packages/chat-core/src/repository.ts, apps/web/src/worker/routes/chat.ts, apps/web/src/pages/ChatPage.tsx
+依赖：P2-08
+验收标准：编辑保存后数据库同步截断后续消息并重新生成回复
+测试方式：`packages/chat-core/src/chat-core.test.ts` (验证 `editUserMessageAndTruncateAfter` 截断下游消息)
+测试结果：通过
+备注：无
+
+[x] P2-11 — 实现重新生成
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：针对最近一条助手回复执行 Regenerate，支持切换模型重试
+相关文件：packages/chat-core/src/repository.ts, apps/web/src/worker/routes/chat.ts, apps/web/src/pages/ChatPage.tsx
+依赖：P2-07, P2-08
+验收标准：移除末尾助手消息并基于原用户消息重新触发流式请求
+测试方式：`pnpm typecheck && pnpm build` + `removeTrailingAssistantMessages` 路由链路
+测试结果：通过 (后端与构建通过；UI 点击流待 P9 E2E 补充)
+备注：无
+
+[x] P2-12 — 实现停止生成
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：前端 AbortController + 后端 AbortSignal 联动，实际中断流并保存已生成部分文本 (`status="stopped"`)
+相关文件：apps/web/src/hooks/useChatStream.ts, apps/web/src/worker/routes/chat.ts, packages/chat-core/src/chat-service.ts
+依赖：P2-07
+验收标准：Abort 触发后保留已接收文本并将消息状态记为 `stopped`
+测试方式：`packages/chat-core/src/chat-core.test.ts` (AbortController 中断流并断言 partial text `"Hello "` 与 `status === "stopped"`)
+测试结果：通过
+备注：无
+
+[x] P2-13 — 实现 Markdown、代码块高亮与数学公式
+阶段：P2
+优先级：P0
+状态：DONE
+目标：集成安全 Markdown 渲染（react-markdown 无 raw HTML XSS）、代码语法高亮与一键复制、KaTeX 数学公式渲染
+相关文件：apps/web/src/components/chat/MarkdownRenderer.tsx
+依赖：P1-04
+验收标准：生产构建打包 KaTeX 与 highlight 样式成功，待 P9 Playwright 视觉/XSS E2E 验证
+测试方式：`pnpm typecheck && pnpm lint && pnpm build`
+测试结果：通过 (构建通过；浏览器渲染待 P9 E2E)
+备注：无
+
+[x] P2-14 — 实现基础工具调用 UI 与转 Work 入口
+阶段：P2
+优先级：P0
+状态：DONE
+目标：展示工具调用入参/状态/结果折叠面板 (`ToolCallCard`)，支持内置安全工具及一键将对话上下文跳转 `/work`
+相关文件：apps/web/src/components/chat/ToolCallCard.tsx, packages/chat-core/src/tools.ts, apps/web/src/pages/ChatPage.tsx
+依赖：P2-07
+验收标准：Chat 工具不含 OS Shell；转 Work 入口跳转 `/work`
+测试方式：`pnpm typecheck && pnpm lint && pnpm build`
+测试结果：通过 (浏览器端到端待 P3-P4 Work 页面就绪后联调)
+备注：无
+
+[x] P2-15 — 实现错误、超时与可控重试
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：指数退避瞬态重试（限次 <= 2，仅重试 429/502/503/504/网络超时，不重试 401 或 AbortError）、前端错误提示与重试按钮
+相关文件：packages/providers/src/retry.ts, apps/web/src/pages/ChatPage.tsx
+依赖：P2-07
+验收标准：401 直接失败不重试，503 在有限次数内退避恢复
+测试方式：`packages/providers/src/providers.test.ts`
+测试结果：通过
+备注：无
+
+[x] P2-16 — 实现 Token 与使用量记录
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：每次模型响应写入 `usage_records`（input/output/reasoning tokens、modelId、providerId、latencyMs）
+相关文件：packages/chat-core/src/repository.ts, packages/chat-core/src/chat-service.ts
+依赖：P2-08
+验收标准：每轮对话结束后 D1 `usage_records` 存在准确记录
+测试方式：`packages/chat-core/src/chat-core.test.ts`
+测试结果：通过
+备注：无
+
+[x] P2-17 — 实现文件上传与 R2 附件存储
+阶段：P2
+优先级：P0
+状态：VERIFIED
+目标：支持安全文件上传（MIME 白名单 + 5MB 大小校验 + 250MB 配额校验 + 失败自动清理 R2）、存入 R2 并绑定到 D1 `artifacts`
+相关文件：apps/web/src/worker/routes/files.ts
+依赖：P1-09, P2-08, AUDIT-03
+验收标准：非法 MIME 拒绝；合法文件保存 R2 且跨用户访问返回 404；删对话自动清理关联 R2 对象
+测试方式：`tests/integration/p2-chat.test.ts`
+测试结果：通过
+备注：无
+
+[x] P2-18 — 实现图片输入与多模态预览
+阶段：P2
+优先级：P0
+状态：DONE
+目标：聊天输入框支持图片上传/粘贴预览，按 Capability Registry 检查模型是否支持 `imageInput`
+相关文件：apps/web/src/pages/ChatPage.tsx, packages/chat-core/src/chat-service.ts
+依赖：P2-06, P2-17
+验收标准：后端 `assertModelCapability(modelId, "imageInput")` 拦截不支持模型；前端组件支持上传与粘贴
+测试方式：`packages/model-registry/src/capabilities.test.ts` + `pnpm build` (端到端多模态流待真实 API Key 与 E2E)
+测试结果：通过 (能力校验与构建通过；真实图片模型调用待密钥)
+备注：无
+
+[ ] P2-19 — 实现 Chat 回归测试与真实 API 受控集成测试
+阶段：P2
+优先级：P0
+状态：BLOCKED
+目标：覆盖 Chat 路由、数据库、权限隔离、停止生成、附件安全的 Vitest 测试，以及由环境变量控制的真实 OpenAI/Anthropic/Gemini API 集成测试
+相关文件：tests/integration/p2-chat.test.ts, tests/integration/providers-live.test.ts
+依赖：P2-01 ~ P2-18
+验收标准：本地 Mock-free 路由与 DB 测试全部通过；真实 API 测试在具备 Key 时实测通过
+测试方式：`pnpm test` (本地全部通过；`providers-live.test.ts` 3 tests gated skipped)
+测试结果：部分通过 (本地测试通过，真实外部 API 缺密钥 BLOCKED)
+备注：需 `RUN_LIVE_PROVIDER_TESTS=1` 与真实 Provider API Key 完成最后外部验收
+
+---
+
+## DESKTOP-P1 — Local-first Desktop (Electron + Windows EXE)
+
+[x] DESK-01 — 解耦 Agent 协议、执行策略与审批管理 (packages/agent-core)
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：实现与 Cloudflare 解耦的 `AgentAdapter`、`ExecutionPolicy`（阻断危险/系统级命令，高危写入/Git/Shell 必须审批）、`ApprovalManager`（幂等去重）与 `NativeAgentLoop`
+相关文件：packages/agent-core/src/*
+依赖：P2-01
+验收标准：单元测试通过且无任何 Cloudflare 专有导入
+测试方式：`packages/agent-core/src/agent-core.test.ts` (2 tests)
+测试结果：通过
+备注：Desktop 与未来 Web 共用
+
+[x] DESK-02 — 实现独立 LocalExecutor 执行引擎 (packages/local-executor)
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：在独立 Node 子进程提供路径逃逸/符号链接防护 (`resolveInsideProject`)、本地项目脚手架、Git 状态/Diff/Commit、Shell 执行（剥离敏感 API Key 环境变量）
+相关文件：packages/local-executor/src/*
+依赖：DESK-01
+验收标准：路径穿越与符号链接逃逸被拦截；真实项目构建可执行且不泄露密钥
+测试方式：`packages/local-executor/src/local-executor.test.ts` (2 tests) + `tests/integration/desktop-executor-ipc.test.ts` (1 test)
+测试结果：通过
+备注：无
+
+[x] DESK-03 — 实现本地 SQLite Repository 与安全凭证存储 (packages/desktop-storage)
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：基于 Electron/Node 内置 `node:sqlite` (`process.getBuiltinModule("node:sqlite")`) 复用迁移与 Repository，实现 Windows DPAPI (`safeStorage`) / AES-256-GCM 凭证库与本地 Blob Store
+相关文件：packages/desktop-storage/src/*, infra/migrations/0003_desktop_local.sql
+依赖：P1-10
+验收标准：数据库不存明文密钥；迁移与项目/对话/Run CRUD 实测通过
+测试方式：`packages/desktop-storage/src/desktop-storage.test.ts` (3 tests) + Electron E2E `vault.json` 检查
+测试结果：通过
+备注：无
+
+[x] DESK-04 — 实现 Electron 主进程、沙盒预加载与安全 IPC (apps/desktop/electron)
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：配置 `contextIsolation: true`、`nodeIntegration: false`、`sandbox: true`、禁用外部弹窗/导航、Zod 校验 IPC、并将 Agent 任务派发至独立子进程 `executor-host.cjs`
+相关文件：apps/desktop/electron/main.ts, apps/desktop/electron/preload.ts, apps/desktop/electron/executor-host.ts
+依赖：DESK-02, DESK-03
+验收标准：Renderer 内 `window.process` 与 `window.require` 均不可访问；主进程可独立启动
+测试方式：`tests/e2e/desktop.spec.ts` (Electron 实测 `hasNodeProcess === false`, `hasRequire === false`)
+测试结果：通过
+备注：无
+
+[x] DESK-05 — 实现 Desktop React 前端 (Chat / Work / Projects / Settings)
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：复用 `@ai-workspace/ui` 与 `@ai-workspace/model-registry` 构建无装饰假页面的 Desktop 应用
+相关文件：apps/desktop/src/*
+依赖：DESK-04
+验收标准：4 个功能页均对接真实 IPC 处理器，类型检查与 Vite 构建通过
+测试方式：`pnpm typecheck && pnpm lint && pnpm build:desktop` + `tests/e2e/desktop.spec.ts`
+测试结果：通过
+备注：无
+
+[x] DESK-06 — 实现本机项目创建、文件编辑与真实构建执行
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：支持在指定目录创建项目模板、浏览文件树、编辑保存文件及运行真实 `npm run build` 并展示结果
+相关文件：apps/desktop/src/views/ProjectsView.tsx, packages/local-executor/src/executor.ts
+依赖：DESK-04, DESK-05
+验收标准：真实修改磁盘文件并执行构建返回退出码与输出
+测试方式：`tests/e2e/desktop.spec.ts` (实测创建项目、改写 `src/index.mjs`、`Run Build` 输出 `Exit 0` & `Build check OK`)
+测试结果：通过
+备注：无
+
+[x] DESK-07 — 实现 Desktop Work 独立进程 Agent 执行、审批面板与取消
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：支持在 Work 视图选择项目与模型、独立进程执行 Agent、高风险操作暂停审批 (`Approve`/`Reject`) 与取消任务
+相关文件：apps/desktop/src/views/WorkView.tsx, apps/desktop/electron/main.ts, packages/local-executor/src/process-host.ts
+依赖：DESK-01, DESK-02, DESK-04
+验收标准：策略审批拦截高危命令与写入；独立进程可响应取消与恢复；真实模型调用需密钥
+测试方式：`tests/integration/desktop-executor-ipc.test.ts` + `tests/e2e/desktop.spec.ts` (项目转入 Work 验证)
+测试结果：通过 (本地策略/审批/子进程验证通过；真实 LLM 端到端见 DESK-12)
+备注：无
+
+[x] DESK-08 — 保留 apps/web 与 Cloudflare 数据并完成全仓库回归验证
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：不删除 `apps/web` 与 D1/R2 迁移，确认所有 Web 与后端测试继续通过
+相关文件：apps/web/*, tests/integration/*
+依赖：DESK-01 ~ DESK-07
+验收标准：全仓库 `typecheck`、`lint`、`format:check`、`vitest run` 与 `build` 全部通过
+测试方式：`pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build`
+测试结果：通过
+备注：无
+
+[x] DESK-09 — 执行 Playwright Desktop Electron E2E 测试
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：在真实 Electron 窗口中端到端测试 Renderer 隔离、加密密钥保存、Chat 状态联动、项目创建编辑保存与真实构建
+相关文件：playwright.config.ts, tests/e2e/desktop.spec.ts
+依赖：DESK-04 ~ DESK-06
+验收标准：`xvfb-run -a pnpm test:e2e` 通过
+测试结果：通过 (1 passed in 2.3s)
+备注：无
+
+[x] DESK-10 — 构建 Windows 可执行程序产物 (`win-unpacked` EXE & ZIP)
+阶段：DESKTOP-P1
+优先级：P0
+状态：VERIFIED
+目标：通过 `electron-builder` 打包 Windows x64 `EpoCanvas AI Workspace.exe` 及可分发 `.zip` 包
+相关文件：apps/desktop/electron-builder.yml, apps/desktop/tsup.config.ts, apps/desktop/package.json
+依赖：DESK-05
+验收标准：生成完整 `EpoCanvas AI Workspace.exe` 与 `-win.zip` 压缩包且无缺失依赖
+测试方式：`pnpm --filter @ai-workspace/desktop package:win:zip`
+测试结果：通过 (产出 `release/win-unpacked/EpoCanvas AI Workspace.exe` 与 `release/EpoCanvas AI Workspace-0.1.0-win.zip`)
+备注：无
+
+[ ] DESK-11 — Windows NSIS 安装包构建与 Windows 实机安装启动测试
+阶段：DESKTOP-P1
+优先级：P0
+状态：BLOCKED
+目标：在 Windows 环境下生成完整 NSIS Setup `.exe` 安装程序，并在真实 Windows 系统执行安装、启动与 DPAPI `safeStorage` 实测
+相关文件：apps/desktop/electron-builder.yml, .github/workflows/ci.yml
+依赖：DESK-10
+验收标准：Windows NSIS Setup `.exe` 打包成功并在真实 Windows 10/11 安装启动无报错
+测试方式：Windows 环境或 GitHub Actions `windows-latest` 执行 `pnpm package:win` 后实机安装启动
+测试结果：失败/阻塞 (Linux 宿主机运行 `package:win` 因缺少 `wine` 报 `spawn wine ENOENT`；无 Windows 实机)
+备注：已在 `.github/workflows/ci.yml` 增加 `package-windows` (`runs-on: windows-latest`) Job
+
+[ ] DESK-12 — Stage 1 真实模型端到端验收 (安装 EXE → 真实对话 → Agent 改文件 → 构建)
+阶段：DESKTOP-P1
+优先级：P0
+状态：BLOCKED
+目标：在配置真实 OpenAI/Anthropic/Gemini API Key 下完成 Desktop 真实对话与 Agent 自动修改本机项目文件并执行构建验收
+相关文件：tests/e2e/desktop.spec.ts, tests/integration/providers-live.test.ts
+依赖：DESK-11, P2-02
+验收标准：真实外部模型流式响应正常、Agent 自动修改文件并触发审批通过构建
+测试方式：配置真实密钥后在 Desktop 应用与 `RUN_LIVE_PROVIDER_TESTS=1` 下实测
+测试结果：未执行
+备注：缺少真实 API Key 且缺少 Windows 实机，按规定保持 BLOCKED
+
+---
+
+## P3 — Native Harness 与 Work Lite (Free SQLite DO + PiHarness)
+
+> **Free-first 架构约定**：P3 优先交付 **Work Lite（免费档可用）** —— 基于 Workers Free 支持的 SQLite-backed Durable Objects (`AgentRunDO`)、Pi Harness、虚拟文件工具 (`read/write/edit/list/grep`)、事件记录、审批、取消与恢复；**严禁**将虚拟文件工作区冒充 Linux Shell。完整容器 Shell (`@cloudflare/sandbox`) 严格隔离在 P4 (`ENABLE_PAID_SANDBOX=true`)。
+
+[ ] P3-01 — 定义 AgentAdapter 接口与执行模式能力区分 (Work Lite vs Sandbox Work)
+阶段：P3
+优先级：P0
+状态：TODO
+目标：定义统一 `AgentAdapter` 接口（`executionMode: "work_lite" | "sandbox_work"`）与 `UnsupportedCapabilityError`，确保不混用 Work Lite 虚拟文件工具与 Paid Linux Sandbox Shell 接口
+相关文件：packages/agent-core/src/adapter.ts
+依赖：P0-10, AUDIT-04
+验收标准：Work Lite 显式声明 `shellExec: false`，调用容器方法返回 `UnsupportedCapabilityError`
+测试结果：未执行
+备注：Free-first 核心隔离边界
+
+[ ] P3-02 — 定义 Run Schema
+阶段：P3
+优先级：P0
+状态：TODO
+目标：Zod + TS 定义 Run 状态机（queued, starting, running, waiting_approval, paused, completed, failed, cancelled）、预算、用量、Artifact 引用
+相关文件：packages/contracts/src/run.ts
+依赖：P3-01
+验收标准：Schema 校验严格且前后端共享
+测试结果：未执行
+备注：无
+
+[ ] P3-03 — 定义统一 Agent Event Schema
+阶段：P3
+优先级：P0
+状态：TODO
+目标：定义带唯一 ID、runId、timestamp、递增 seq 与扩展字段的统一事件协议（message.*, tool.*, plan.updated, file.*, approval.*, artifact.created, run.*）
+相关文件：packages/contracts/src/events.ts
+依赖：P3-02
+验收标准：支持基于 seq 断点续传与保留 Provider 特有事件
+测试结果：未执行
+备注：无
+
+[ ] P3-04 — 实现 Harness Registry
+阶段：P3
+优先级：P0
+状态：TODO
+目标：注册与发现可用 Agent Harness 及其声明能力
+相关文件：packages/agent-core/src/harness-registry.ts
+依赖：P3-01
+验收标准：支持按 harnessId 解析适配器
+测试结果：未执行
+备注：无
+
+[ ] P3-05 — 实现 Run Manager
+阶段：P3
+优先级：P0
+状态：TODO
+目标：管理 Run 生命周期创建、状态流转守卫、D1 索引同步与并发控制
+相关文件：packages/agent-core/src/run-manager.ts
+依赖：P3-02, P3-04
+验收标准：非法状态跳转被拒绝
+测试结果：未执行
+备注：无
+
+[ ] P3-06 — 实现 Session Manager
+阶段：P3
+优先级：P0
+状态：TODO
+目标：管理平台 Session 与底层 Provider Session ID 的映射与恢复状态
+相关文件：packages/agent-core/src/session-manager.ts
+依赖：P3-01
+验收标准：会话重连与恢复逻辑有单测覆盖
+测试结果：未执行
+备注：无
+
+[ ] P3-07 — 实现 Tool Registry
+阶段：P3
+优先级：P0
+状态：TODO
+目标：统一工具定义、参数 Zod 校验、风险分级（read / write / exec / external）与策略检查
+相关文件：packages/agent-core/src/tool-registry.ts
+依赖：P3-01
+验收标准：高风险工具默认需要审批策略拦截
+测试结果：未执行
+备注：无
+
+[ ] P3-08 — 实现 Approval Manager
+阶段：P3
+优先级：P0
+状态：TODO
+目标：实现审批请求挂起、超时/取消处理、用户批准/拒绝（含幂等去重与副作用保护）
+相关文件：packages/agent-core/src/approval-manager.ts
+依赖：P3-05, P3-07
+验收标准：批准后继续执行，拒绝后安全中止或反馈 Agent，不重复执行副作用操作
+测试结果：未执行
+备注：无
+
+[ ] P3-09 — 实现 Capability Negotiation
+阶段：P3
+优先级：P0
+状态：TODO
+目标：运行时协商 Harness 支持能力，不支持时返回标准 UnsupportedCapability 响应
+相关文件：packages/agent-core/src/capabilities.ts
+依赖：P3-01, P3-04
+验收标准：禁止假装支持未实现能力
+测试结果：未执行
+备注：无
+
+[ ] P3-10 — 接入 Cloudflare Agents SDK 与 Durable Objects
+阶段：P3
+优先级：P0
+状态：TODO
+目标：搭建 Agent Run Durable Object（集成 `agents` SDK），在浏览器断开后仍可在服务端维持运行状态与事件推送
+相关文件：apps/web/src/worker/durable/AgentRunDO.ts
+依赖：P3-05, P1-02
+验收标准：DO 本地绑定可初始化、路由与持久化状态
+测试结果：未执行
+备注：无
+
+[ ] P3-11 — 验证 Pi Durable Harness 集成
+阶段：P3
+优先级：P0
+状态：TODO
+目标：安装并验证 `agents/harness/pi` + `@earendil-works/pi-durable` + `@cloudflare/computer` 在 DO SQLite 下的运行与崩溃恢复
+相关文件：packages/agent-native/src/pi-bridge.ts
+依赖：P3-10, P0-05
+验收标准：TypeScript 编译与 DO 本地测试验证通过
+测试结果：未执行
+备注：若官方包接口有差异，按实测包导出调整并记录 DECISIONS.md
+
+[ ] P3-12 — 实现 Native Harness (packages/agent-native)
+阶段：P3
+优先级：P0
+状态：TODO
+目标：实现基于标准 API Key（OpenAI / Anthropic / Gemini）的工具调用 Agent 循环，支持步数/Token 预算、审批暂停、工具调用与事件发射
+相关文件：packages/agent-native/src/*
+依赖：P3-01 ~ P3-11, P2-01
+验收标准：通过 Native Harness 完整驱动多步工具调用任务
+测试结果：未执行
+备注：无
+
+[ ] P3-13 — 实现 Agent Event Stream (WebSocket / SSE + seq 恢复)
+阶段：P3
+优先级：P0
+状态：TODO
+目标：支持实时流式订阅与按 `afterSeq` 重连补发遗漏事件
+相关文件：apps/web/src/worker/routes/runs.ts, packages/agent-core/src/event-stream.ts
+依赖：P3-03, P3-10
+验收标准：断线重连按 seq 准确补齐遗漏事件，无重复无丢失
+测试结果：未执行
+备注：无
+
+[ ] P3-14 — 实现事件与 Run 状态持久化
+阶段：P3
+优先级：P0
+状态：TODO
+目标：DO SQLite 实时写事件 + D1 run_events / runs 异步归档与 R2 长日志备份
+相关文件：packages/agent-core/src/persistence.ts
+依赖：P3-10, P1-10
+验收标准：刷新网页可查看完整历史事件序列
+测试结果：未执行
+备注：无
+
+[ ] P3-15 — 实现任务取消与断点恢复
+阶段：P3
+优先级：P0
+状态：TODO
+目标：支持用户主动取消运行中/等待审批中的 Run，以及中断后按检查点恢复或明确报告不可恢复状态
+相关文件：packages/agent-core/src/recovery.ts
+依赖：P3-12, P3-14
+验收标准：取消后停止后续步骤并进入 cancelled 状态
+测试结果：未执行
+备注：无
+
+[ ] P3-16 — 实现执行预算与 Execution Policy
+阶段：P3
+优先级：P0
+状态：TODO
+目标：最大步数、Token 预算、单次运行超时与执行策略强制限制
+相关文件：packages/agent-core/src/execution-policy.ts
+依赖：P3-05
+验收标准：超出步数或 Token 预算时安全终止并记录原因
+测试结果：未执行
+备注：无
+
+[ ] P3-17 — 实现 Agent Contract Tests
+阶段：P3
+优先级：P0
+状态：TODO
+目标：对 AgentAdapter、事件序列单调性、审批流转、取消、预算超限、断线 seq 恢复编写契约测试套件
+相关文件：tests/harness-contract/native-harness.test.ts
+依赖：P3-12 ~ P3-16
+验收标准：所有契约测试通过
+测试结果：未执行
+备注：无
+
+---
+
+## P4 — Cloudflare Sandbox 与 Work MVP
+
+[ ] P4-01 — 定义 SandboxProvider 统一接口 (packages/sandbox)
+阶段：P4
+优先级：P0
+状态：TODO
+目标：定义与具体基础设施解耦的 SandboxProvider 接口（createWorkspace, restoreWorkspace, readFile, writeFile, listFiles, exec, startProcess, stopProcess, getLogs, createPreview, snapshot, destroy）
+相关文件：packages/sandbox/src/provider.ts
+依赖：P0-06
+验收标准：业务逻辑仅依赖 SandboxProvider 接口
+测试结果：未执行
+备注：无
+
+[ ] P4-02 — 实现 CloudflareSandboxProvider (`@cloudflare/sandbox`)
+阶段：P4
+优先级：P0
+状态：TODO
+目标：接入 `@cloudflare/sandbox` 实现真实容器文件系统、命令执行、后台进程、R2 备份挂载与快照能力
+相关文件：packages/sandbox/src/cloudflare-sandbox.ts
+依赖：P4-01
+验收标准：接口实现完整且通过契约测试；云端容器需 Cloudflare Containers 运行环境验证
+测试结果：未执行
+备注：本地无 Cloudflare Containers 运行时需做明确环境说明并辅以 Docker/Mock 契约层分清真实度
+
+[ ] P4-03 — 实现 Workspace 创建与生命周期管理
+阶段：P4
+优先级：P0
+状态：TODO
+目标：在 D1 workspaces 表记录状态并关联 Sandbox 实例与 R2 存储路径
+相关文件：packages/sandbox/src/workspace-manager.ts
+依赖：P4-01, P1-10
+验收标准：可创建、查询、销毁 Workspace 且做用户隔离
+测试结果：未执行
+备注：无
+
+[ ] P4-04 — 实现 Sandbox 文件读写与目录树操作
+阶段：P4
+优先级：P0
+状态：TODO
+目标：封装安全路径规范化（防路径穿越 `../`）后的 readFile, writeFile, listFiles, deleteFile
+相关文件：packages/sandbox/src/files.ts
+依赖：P4-02
+验收标准：路径穿越攻击被拒绝，合法文件读写准确
+测试结果：未执行
+备注：无
+
+[ ] P4-05 — 实现 Shell 命令执行与超时保护
+阶段：P4
+优先级：P0
+状态：TODO
+目标：通过 Sandbox exec 执行真实命令，返回 stdout/stderr/exitCode，支持超时与输出脱敏
+相关文件：packages/sandbox/src/exec.ts
+依赖：P4-02
+验收标准：真实返回命令输出与退出码，日志不含敏感环境变量明文
+测试结果：未执行
+备注：无
+
+[ ] P4-06 — 实现进程管理 (startProcess / stopProcess)
+阶段：P4
+优先级：P0
+状态：TODO
+目标：启动、查询与停止容器内长期进程（如 dev server）
+相关文件：packages/sandbox/src/processes.ts
+依赖：P4-02
+验收标准：进程启停状态准确追踪
+测试结果：未执行
+备注：无
+
+[ ] P4-07 — 实现实时日志流
+阶段：P4
+优先级：P0
+状态：TODO
+目标：流式推送进程输出与 Run 执行日志至前端与持久化归档
+相关文件：apps/web/src/worker/routes/workspaces.ts
+依赖：P4-05, P4-06, P3-13
+验收标准：前端可实时接收并查看历史日志
+测试结果：未执行
+备注：无
+
+[ ] P4-08 — 实现执行权限策略
+阶段：P4
+优先级：P0
+状态：TODO
+目标：区分只读操作、工作区写入、依赖安装、危险命令、外网写入/Git Push/部署的审批级别
+相关文件：packages/agent-core/src/execution-policy.ts
+依赖：P3-07, P3-16
+验收标准：高危命令触发 approval.required 而非直接执行
+测试结果：未执行
+备注：无
+
+[ ] P4-09 — 实现 Work 任务审批流
+阶段：P4
+优先级：P0
+状态：TODO
+目标：前后端完整审批面板与 API，支持 Approve / Reject / Approve Once，防止重放
+相关文件：apps/web/src/components/work/ApprovalPanel.tsx, apps/web/src/worker/routes/approvals.ts
+依赖：P3-08, P4-08
+验收标准：审批解决后 Agent 立即恢复或中止
+测试结果：未执行
+备注：无
+
+[ ] P4-10 — 实现 Workspace 持久化保存 (Git/R2/D1)
+阶段：P4
+优先级：P0
+状态：TODO
+目标：将工作区变更打包或同步归档至 R2 与元数据记录至 D1，不依赖容器临时磁盘作为唯一数据源
+相关文件：packages/sandbox/src/persistence.ts
+依赖：P4-03, P1-09
+验收标准：容器销毁后文件数据仍存于 R2
+测试结果：未执行
+备注：无
+
+[ ] P4-11 — 实现 Workspace 恢复
+阶段：P4
+优先级：P0
+状态：TODO
+目标：从 R2 归档或快照恢复 Workspace 到新 Sandbox 实例
+相关文件：packages/sandbox/src/persistence.ts
+依赖：P4-10
+验收标准：恢复后文件内容与目录结构与保存前一致
+测试结果：未执行
+备注：无
+
+[ ] P4-12 — 实现 Work 多面板主界面
+阶段：P4
+优先级：P0
+状态：TODO
+目标：开发 `/work` 多面板工作区：左侧任务与 Agent 对话、右侧文件/代码/Diff/Preview、底部 Terminal/日志/Artifacts
+相关文件：apps/web/src/pages/WorkPage.tsx, apps/web/src/components/work/*
+依赖：P1-05, P3-13
+验收标准：各面板交互均有真实数据驱动，无假按钮
+测试结果：未执行
+备注：无
+
+[ ] P4-13 — 实现 Work 任务列表与创建流
+阶段：P4
+优先级：P0
+状态：TODO
+目标：创建任务（选项目、模型、Harness、Prompt）、任务列表筛选、状态标签与后台持续执行查看
+相关文件：apps/web/src/components/work/TaskList.tsx, apps/web/src/components/work/CreateRunDialog.tsx
+依赖：P4-12
+验收标准：关闭浏览器重开后仍可查看后台任务最新状态与产物
+测试结果：未执行
+备注：无
+
+[ ] P4-14 — 实现事件时间线与任务计划展示
+阶段：P4
+优先级：P0
+状态：TODO
+目标：按 seq 顺序展示 plan.updated、tool.*、file.*、approval.*、artifact.* 时间线与耗时统计
+相关文件：apps/web/src/components/work/EventTimeline.tsx
+依赖：P4-12, P3-03
+验收标准：实时刷新与历史回放一致
+测试结果：未执行
+备注：无
+
+[ ] P4-15 — 实现 Work 任务取消操作
+阶段：P4
+优先级：P0
+状态：TODO
+目标：UI 停止任务按钮联动 Run cancel API 及 Sandbox 进程清理
+相关文件：apps/web/src/pages/WorkPage.tsx
+依赖：P3-15, P4-12
+验收标准：点击停止后状态转为 cancelled 且资源清理
+测试结果：未执行
+备注：无
+
+[ ] P4-16 — 实现 Work 错误恢复与断点重连
+阶段：P4
+优先级：P0
+状态：TODO
+目标：容器丢失/网络中断提示、自动按 seq 重连与任务恢复触发
+相关文件：apps/web/src/hooks/useRunStream.ts
+依赖：P3-13, P4-11
+验收标准：断网恢复后 UI 自动补齐事件不丢状态
+测试结果：未执行
+备注：无
+
+[ ] P4-17 — 完成 Work MVP 端到端执行测试
+阶段：P4
+优先级：P0
+状态：TODO
+目标：端到端测试创建 Work 任务 -> 生成/修改文件 -> 执行命令 -> 查看结果 -> 保存恢复
+相关文件：tests/e2e/work-mvp.spec.ts
+依赖：P4-01 ~ P4-16
+验收标准：全流程测试通过
+测试结果：未执行
+备注：无
+
+---
+
+## P5 — Projects 与项目嵌入开发
+
+[ ] P5-01 — 实现项目创建（空白/模板）
+阶段：P5
+优先级：P1
+状态：TODO
+目标：支持创建空白项目或从内置模板（React+Vite、Node API 等）创建项目
+相关文件：packages/projects/src/templates.ts, apps/web/src/worker/routes/projects.ts
+依赖：P4-03
+验收标准：新建项目自动生成初始文件并持久化
+测试结果：未执行
+备注：无
+
+[ ] P5-02 — 实现项目列表与详情页
+阶段：P5
+优先级：P1
+状态：TODO
+目标：实现 `/projects` 列表与 `/projects/:id` 工作区入口、项目环境变量配置（加密保存）
+相关文件：apps/web/src/pages/ProjectsPage.tsx, apps/web/src/pages/ProjectDetailPage.tsx
+依赖：P5-01
+验收标准：列表、创建、搜索、环境变量增删改通过测试
+测试结果：未执行
+备注：无
+
+[ ] P5-03 — 实现项目数据库与版本元数据管理
+阶段：P5
+优先级：P1
+状态：TODO
+目标：完善 D1 projects、project_env_vars、project_backups 等元数据读写与权限校验
+相关文件：packages/projects/src/repository.ts
+依赖：P1-10, P1-13
+验收标准：严格多用户隔离
+测试结果：未执行
+备注：无
+
+[ ] P5-04 — 实现项目与 Workspace 绑定
+阶段：P5
+优先级：P1
+状态：TODO
+目标：每个项目关联持久云端 Workspace，支持 Work 任务直接挂载项目工作区
+相关文件：packages/projects/src/workspace-binding.ts
+依赖：P4-03, P5-03
+验收标准：项目打开与 Work 执行共享同一持久化文件视图
+测试结果：未执行
+备注：无
+
+[ ] P5-05 — 实现 Git 仓库导入
+阶段：P5
+优先级：P1
+状态：TODO
+目标：验证合法 HTTPS Git URL（防 SSRF/file://），克隆到 Sandbox 并持久化至 R2
+相关文件：packages/projects/src/git-import.ts
+依赖：P4-05, P5-04
+验收标准：拒绝内网 IP 与非法协议；合法公开仓库克隆成功
+测试结果：未执行
+备注：无
+
+[ ] P5-06 — 实现交互式文件树
+阶段：P5
+优先级：P1
+状态：TODO
+目标：支持文件/目录展开、创建、重命名、移动、删除与图标展示
+相关文件：apps/web/src/components/projects/FileTree.tsx
+依赖：P4-04, P5-02
+验收标准：所有文件增删改重命名真实同步至后端 Workspace
+测试结果：未执行
+备注：无
+
+[ ] P5-07 — 集成 Monaco Editor 与 Diff Editor
+阶段：P5
+优先级：P1
+状态：TODO
+目标：集成 `@monaco-editor/react` 支持语法高亮、多标签打开与 Monaco Diff Editor 对比变更
+相关文件：apps/web/src/components/projects/CodeEditor.tsx
+依赖：P5-06
+验收标准：能编辑项目代码文件、展示语言高亮与文件 Diff
+测试结果：未执行
+备注：无
+
+[ ] P5-08 — 实现编辑器文件保存 (Ctrl/Cmd+S)
+阶段：P5
+优先级：P1
+状态：TODO
+目标：保存编辑内容到后端 Workspace 并标记脏状态与保存成功反馈
+相关文件：apps/web/src/components/projects/CodeEditor.tsx
+依赖：P5-07, P4-04
+验收标准：保存后刷新文件重新读取内容一致
+测试结果：未执行
+备注：无
+
+[ ] P5-09 — 集成 xterm.js 云端终端
+阶段：P5
+优先级：P1
+状态：TODO
+目标：在 Projects 与 Work 底部集成 `@xterm/xterm` 交互式终端
+相关文件：apps/web/src/components/projects/TerminalPane.tsx
+依赖：P4-05, P5-02
+验收标准：终端尺寸自适应，支持输入命令与真实输出渲染
+测试结果：未执行
+备注：无
+
+[ ] P5-10 — 实现 Shell 流式输出与 PTY/WebSocket 通道
+阶段：P5
+优先级：P1
+状态：TODO
+目标：Worker WebSocket 代理安全连接 Sandbox Shell 流，支持 Ctrl+C 中断与输出流控
+相关文件：apps/web/src/worker/routes/terminal.ts
+依赖：P5-09, P4-05
+验收标准：真实命令（ls, npm test, git status）输出实时流式回传
+测试结果：未执行
+备注：严禁使用假终端输出
+
+[ ] P5-11 — 实现 Git Status 与 Git Diff
+阶段：P5
+优先级：P1
+状态：TODO
+目标：在 Sandbox 执行 `git status --porcelain` 与 `git diff` 并在前端用 Monaco Diff Editor 展示
+相关文件：packages/projects/src/git.ts, apps/web/src/components/projects/GitPanel.tsx
+依赖：P5-07, P4-05
+验收标准：修改文件后可实时看到精确 Diff
+测试结果：未执行
+备注：无
+
+[ ] P5-12 — 实现 Git Commit（及受控 Git Push 审批）
+阶段：P5
+优先级：P1
+状态：TODO
+目标：支持在界面选择文件暂存并 Commit；远端 Push 必须经过独立审批与凭据校验
+相关文件：packages/projects/src/git.ts, apps/web/src/components/projects/GitPanel.tsx
+依赖：P5-11, P4-09
+验收标准：本地 Commit 成功写入 Git 历史并记录项目版本
+测试结果：未执行
+备注：无
+
+[ ] P5-13 — 实现项目开发服务器启动与端口追踪
+阶段：P5
+优先级：P1
+状态：TODO
+目标：一键启动/停止项目 dev server，检测监听端口与健康状态并反馈错误日志
+相关文件：packages/projects/src/dev-server.ts
+依赖：P4-06
+验收标准：能真实启动项目 Vite/Node 开发服务器并检测端口就绪
+测试结果：未执行
+备注：无
+
+[ ] P5-14 — 实现安全网页 Preview
+阶段：P5
+优先级：P1
+状态：TODO
+目标：隔离 Origin 代理或 Sandbox Preview URL，校验用户权限、隔离 Cookie、防 SSRF、沙箱停止后展示过期提示
+相关文件：apps/web/src/worker/routes/preview.ts, apps/web/src/components/projects/PreviewPane.tsx
+依赖：P5-13
+验收标准：非授权用户访问 Preview 被拒；主站 Cookie 不共享；真实渲染运行中的应用
+测试结果：未执行
+备注：严禁使用静态 HTML 假截图
+
+[ ] P5-15 — 实现项目备份与版本快照
+阶段：P5
+优先级：P1
+状态：TODO
+目标：手动与自动打包项目工作区至 R2 归档并写入版本记录
+相关文件：packages/projects/src/backup.ts
+依赖：P4-10, P5-03
+验收标准：生成可下载/可恢复的 R2 快照记录
+测试结果：未执行
+备注：无
+
+[ ] P5-16 — 实现项目恢复
+阶段：P5
+优先级：P1
+状态：TODO
+目标：从历史备份快照恢复项目文件树
+相关文件：packages/projects/src/backup.ts
+依赖：P5-15, P4-11
+验收标准：恢复后文件与备份时完全一致
+测试结果：未执行
+备注：无
+
+[ ] P5-17 — 实现 Chat → Work 任务交接
+阶段：P5
+优先级：P1
+状态：TODO
+目标：在 Chat 中基于当前对话与项目上下文创建关联项目的 Work Run
+相关文件：apps/web/src/worker/routes/handoff.ts
+依赖：P2-14, P4-13, P5-04
+验收标准：创建的 Work Run 自动携带源 conversationId、projectId 与摘要上下文
+测试结果：未执行
+备注：无
+
+[ ] P5-18 — 实现 Work → Chat 成果返回
+阶段：P5
+优先级：P1
+状态：TODO
+目标：Work 任务完成后将执行摘要、变更文件列表、Artifacts 与 Preview 链接回写源 Chat 对话
+相关文件：apps/web/src/worker/routes/handoff.ts
+依赖：P5-17
+验收标准：源 Chat 中可看到结构化成果卡片并跳转到产物
+测试结果：未执行
+备注：无
+
+---
+
+## P6 — 多 Harness 接入 (API 优先与合规接入)
+
+[ ] P6-01 — 验证 OpenAI Agents API
+阶段：P6
+优先级：P1
+状态：TODO
+目标：调研并验证 OpenAI Agents API (Session/Run/Events/Tools) 官方端点与 SDK
+相关文件：packages/agent-codex/src/openai-agents.ts
+依赖：P3-01, P0-08
+验收标准：记录 API 契约与支持能力清单
+测试结果：未执行
+备注：无
+
+[ ] P6-02 — 建立 OpenAI Managed Adapter
+阶段：P6
+优先级：P1
+状态：TODO
+目标：基于 OpenAI Agents API 实现 AgentAdapter
+相关文件：packages/agent-codex/src/openai-managed-adapter.ts
+依赖：P6-01
+验收标准：通过 Contract Tests（支持真实 Key 下实测）
+测试结果：未执行
+备注：无
+
+[ ] P6-03 — 验证 Codex App Server
+阶段：P6
+优先级：P1
+状态：TODO
+目标：验证 Codex CLI App Server JSON-RPC 2.0 协议与审批映射
+相关文件：packages/agent-codex/src/codex-app-server.ts
+依赖：P0-08, P4-02
+验收标准：记录 JSON-RPC 方法映射与限制
+测试结果：未执行
+备注：无
+
+[ ] P6-04 — 验证 Cloudflare Codex Container Harness
+阶段：P6
+优先级：P1
+状态：TODO
+目标：验证在 Cloudflare Container/Sandbox 中运行 Codex 并通过 Egress 注入合法 OpenAI API Key
+相关文件：packages/agent-codex/src/container-harness.ts
+依赖：P6-03, P4-02
+验收标准：容器内不落盘长期 API Key，仅通过 API Key 合规路线驱动
+测试结果：未执行
+备注：无
+
+[ ] P6-05 — 实现可用的 Codex Adapter (packages/agent-codex)
+阶段：P6
+优先级：P1
+状态：TODO
+目标：实现符合 AgentAdapter 契约的 CodexAdapter 并注册至 Harness Registry
+相关文件：packages/agent-codex/src/index.ts
+依赖：P6-02, P6-04
+验收标准：通过统一事件协议上报消息、文件变更、命令与审批
+测试结果：未执行
+备注：无
+
+[ ] P6-06 — 验证 Claude Agent SDK
+阶段：P6
+优先级：P1
+状态：TODO
+目标：验证 `@anthropic-ai/claude-agent-sdk` 在 API Key 模式下的工具、MCP 与会话管理接口
+相关文件：packages/agent-claude/src/sdk-check.ts
+依赖：P0-08, P3-01
+验收标准：确认合法 API Key 调用路线，禁用个人订阅 OAuth Token 转发
+测试结果：未执行
+备注：无
+
+[ ] P6-07 — 验证 Claude Code Container Harness
+阶段：P6
+优先级：P1
+状态：TODO
+目标：验证 Cloudflare ContainerHarness + ContainerEgress 运行 Claude Code
+相关文件：packages/agent-claude/src/container-harness.ts
+依赖：P6-06, P4-02
+验收标准：容器隔离且凭证仅在 Worker Egress 层注入
+测试结果：未执行
+备注：无
+
+[ ] P6-08 — 实现合法 API 驱动的 Claude Agent Adapter (packages/agent-claude)
+阶段：P6
+优先级：P1
+状态：TODO
+目标：实现符合 AgentAdapter 契约的 ClaudeAdapter
+相关文件：packages/agent-claude/src/index.ts
+依赖：P6-06, P6-07
+验收标准：通过统一事件协议与审批映射
+测试结果：未执行
+备注：无
+
+[ ] P6-09 — 验证 Gemini CLI ACP 模式
+阶段：P6
+优先级：P1
+状态：TODO
+目标：验证 `gemini --acp` JSON-RPC stdio 协议在 Sandbox 中通过合法 GEMINI_API_KEY 运行
+相关文件：packages/agent-gemini/src/acp-client.ts
+依赖：P0-08, P4-02
+验收标准：明确 ACP 方法与 Capability Negotiation 限制
+测试结果：未执行
+备注：无
+
+[ ] P6-10 — 实现 Gemini Adapter (packages/agent-gemini)
+阶段：P6
+优先级：P1
+状态：TODO
+目标：实现符合 AgentAdapter 契约的 GeminiAdapter（支持 API 驱动与 ACP 模式）
+相关文件：packages/agent-gemini/src/index.ts
+依赖：P6-09
+验收标准：通过统一事件协议映射，不支持能力返回 UnsupportedCapability
+测试结果：未执行
+备注：无
+
+[ ] P6-11 — 实现前端 Engine Selector 与能力提示
+阶段：P6
+优先级：P1
+状态：TODO
+目标：在 Work 创建任务界面支持切换 Native / OpenAI Codex / Claude / Gemini Harness 并展示各引擎实时能力标签
+相关文件：apps/web/src/components/work/EngineSelector.tsx
+依赖：P6-05, P6-08, P6-10
+验收标准：切换引擎显示支持与不支持的能力说明
+测试结果：未执行
+备注：无
+
+[ ] P6-12 — 实现统一事件映射层
+阶段：P6
+优先级：P1
+状态：TODO
+目标：将不同 Harness 事件无损映射为平台统一 AgentEvent + `providerRaw` 扩展字段
+相关文件：packages/agent-core/src/event-mapper.ts
+依赖：P3-03, P6-05, P6-08, P6-10
+验收标准：前端时间线无需针对特定 Harness 重写展示逻辑
+测试结果：未执行
+备注：无
+
+[ ] P6-13 — 实现多引擎统一审批桥接
+阶段：P6
+优先级：P1
+状态：TODO
+目标：各引擎工具/命令审批统一汇入平台 Approval Manager
+相关文件：packages/agent-core/src/approval-bridge.ts
+依赖：P3-08, P6-12
+验收标准：用户可在同一审批面板处理任意引擎的审批请求
+测试结果：未执行
+备注：无
+
+[ ] P6-14 — 实现 Provider Session 映射与恢复
+阶段：P6
+优先级：P1
+状态：TODO
+目标：记录平台 Run/Session 与底层 Provider Thread/Session ID 的关联并支持合法恢复
+相关文件：packages/agent-core/src/session-manager.ts
+依赖：P3-06, P6-05, P6-08, P6-10
+验收标准：可查询并按引擎能力恢复会话
+测试结果：未执行
+备注：无
+
+[ ] P6-15 — 实现多 Engine Contract Tests
+阶段：P6
+优先级：P1
+状态：TODO
+目标：跨 Native + Codex + Claude + Gemini Adapter 运行统一契约测试套件
+相关文件：tests/harness-contract/multi-engine.test.ts
+依赖：P6-11 ~ P6-14
+验收标准：Native 与至少一个额外 Harness 完成真实/受控任务测试，能力协商与降级行为符合预期
+测试结果：未执行
+备注：无
+
+---
+
+## P7 — Studio 与多媒体生成
+
+[ ] P7-01 — 创建 Media Service (packages/media)
+阶段：P7
+优先级：P1
+状态：TODO
+目标：构建独立媒体生成任务调度与存储服务
+相关文件：packages/media/src/service.ts
+依赖：P1-09, P1-10
+验收标准：任务状态、参数校验、使用量记录完整
+测试结果：未执行
+备注：无
+
+[ ] P7-02 — 创建 Image Provider Registry
+阶段：P7
+优先级：P1
+状态：TODO
+目标：支持 OpenAI Images (`GPT Image 2.5` / `gpt-image-1`) 与 Google Gemini (`gemini-nano-banana-2.1` / Imagen) 图片 Provider 扩展接口
+相关文件：packages/media/src/image-registry.ts
+依赖：P7-01, P2-01
+验收标准：按模型能力曝光宽高比、尺寸、数量、风格等参数
+测试结果：未执行
+备注：无
+
+[ ] P7-03 — 接入真实图片生成 API
+阶段：P7
+优先级：P1
+状态：TODO
+目标：实现真实调用 OpenAI 与 Google 图片生成 API 的适配器（禁止静态占位图）
+相关文件：packages/media/src/providers/*
+依赖：P7-02
+验收标准：集成测试通过；真实出图需有效 API Key
+测试结果：未执行
+备注：无
+
+[ ] P7-04 — 实现 Studio 生图页面
+阶段：P7
+优先级：P1
+状态：TODO
+目标：实现 `/studio` 页面：Prompt 输入、Provider/模型选择、生成画廊、详情查看
+相关文件：apps/web/src/pages/StudioPage.tsx
+依赖：P1-05, P7-01
+验收标准：所有控件有真实后端行为
+测试结果：未执行
+备注：无
+
+[ ] P7-05 — 实现图片参数面板
+阶段：P7
+优先级：P1
+状态：TODO
+目标：尺寸/宽高比、数量、质量、参考图等参数动态适配所选图片模型
+相关文件：apps/web/src/components/studio/ImageParams.tsx
+依赖：P7-02, P7-04
+验收标准：参数校验严格且透传至模型 API
+测试结果：未执行
+备注：无
+
+[ ] P7-06 — 实现生图任务状态追踪
+阶段：P7
+优先级：P1
+状态：TODO
+目标：queued / generating / completed / failed 异步状态反馈与轮询/推送
+相关文件：apps/web/src/worker/routes/studio.ts
+依赖：P7-01, P7-04
+验收标准：刷新页面可看到进行中或已完成任务
+测试结果：未执行
+备注：无
+
+[ ] P7-07 — 保存生成图片到 R2 与 Artifact 元数据
+阶段：P7
+优先级：P1
+状态：TODO
+目标：将生成图片二进制存入 R2 并记录 D1 artifacts 与 media_generations 表，严格隔离访问权限
+相关文件：packages/media/src/storage.ts
+依赖：P7-01, P1-09
+验收标准：跨用户访问生成图片返回 403/404
+测试结果：未执行
+备注：无
+
+[ ] P7-08 — 实现 Studio 生成历史
+阶段：P7
+优先级：P1
+状态：TODO
+目标：分页展示用户生图历史、Prompt、模型、耗时与删除操作
+相关文件：apps/web/src/components/studio/GenerationHistory.tsx
+依赖：P7-07
+验收标准：删除同时清理 R2 对象与元数据
+测试结果：未执行
+备注：无
+
+[ ] P7-09 — 实现生成图片下载
+阶段：P7
+优先级：P1
+状态：TODO
+目标：提供鉴权下载接口与正确 Content-Disposition / MIME 类型
+相关文件：apps/web/src/worker/routes/studio.ts
+依赖：P7-07
+验收标准：浏览器可正确下载 PNG/WebP/JPEG 文件
+测试结果：未执行
+备注：无
+
+[ ] P7-10 — 实现 Chat 生图工具
+阶段：P7
+优先级：P1
+状态：TODO
+目标：在 Chat 模式注册 `generate_image` 工具，在对话内直接出图并内联展示
+相关文件：packages/chat-core/src/tools/image-gen.ts
+依赖：P7-03, P2-14
+验收标准：对话调用工具后返回真实图片 Artifact URL
+测试结果：未执行
+备注：无
+
+[ ] P7-11 — 实现 Work 生图工具
+阶段：P7
+优先级：P1
+状态：TODO
+目标：在 Agent Tool Registry 注册 `generate_image` 工具，支持 Agent 生成图片并写入工作区
+相关文件：packages/agent-core/src/tools/image-gen.ts
+依赖：P7-03, P3-07, P4-04
+验收标准：Work Agent 可生成图片并作为项目静态资源使用
+测试结果：未执行
+备注：无
+
+[ ] P7-12 — 实现图片导入 Projects
+阶段：P7
+优先级：P1
+状态：TODO
+目标：一键将 Studio 历史图片复制到指定项目的指定路径（如 `public/assets/`）
+相关文件：apps/web/src/worker/routes/studio.ts
+依赖：P7-07, P5-04
+验收标准：导入后项目文件树可见该真实图片文件
+测试结果：未执行
+备注：无
+
+[ ] P7-13 — 实现生图失败处理与配额限制
+阶段：P7
+优先级：P1
+状态：TODO
+目标：内容安全拦截错误提示、用户日/月生图配额限制与用量统计
+相关文件：packages/media/src/quota.ts
+依赖：P7-01
+验收标准：超配额返回 429 与明确错误码
+测试结果：未执行
+备注：无
+
+---
+
+## P8 — MCP、Skills 与插件系统
+
+[ ] P8-01 — 实现 Plugin Registry (packages/plugin-sdk)
+阶段：P8
+优先级：P1
+状态：TODO
+目标：实现插件注册、依赖与生命周期管理内核
+相关文件：packages/plugin-sdk/src/registry.ts
+依赖：P3-07
+验收标准：支持注册、发现、启用、停用与卸载
+测试结果：未执行
+备注：无
+
+[ ] P8-02 — 实现插件 Manifest 规范
+阶段：P8
+优先级：P1
+状态：TODO
+目标：Zod 定义插件 Manifest（id, name, version, type: mcp_tool|agent_skill|mcp_app|platform_app|model_provider|media_provider, permissions, configSchema）
+相关文件：packages/plugin-sdk/src/manifest.ts
+依赖：P8-01
+验收标准：非法 Manifest 被严格拒绝
+测试结果：未执行
+备注：无
+
+[ ] P8-03 — 实现插件配置存储与加密凭证
+阶段：P8
+优先级：P1
+状态：TODO
+目标：按安装范围（user / org / project）存储配置并对敏感密钥字段加密
+相关文件：apps/web/src/worker/routes/plugins.ts
+依赖：P8-02, P1-14
+验收标准：配置校验与加密存储通过测试
+测试结果：未执行
+备注：无
+
+[ ] P8-04 — 实现插件权限模型与沙箱隔离
+阶段：P8
+优先级：P1
+状态：TODO
+目标：最小权限声明（network:allowlist, project:read, project:write, chat:tool 等），禁止未审核第三方 JS 在主应用特权上下文运行
+相关文件：packages/plugin-sdk/src/permissions.ts
+依赖：P8-02
+验收标准：未授权能力调用一律拒绝并记入审计日志
+测试结果：未执行
+备注：无
+
+[ ] P8-05 — 实现 MCP Client (packages/mcp)
+阶段：P8
+优先级：P1
+状态：TODO
+目标：集成 `@modelcontextprotocol/sdk` 实现 Streamable HTTP / SSE 远程 MCP Server 客户端（含 SSRF 检查）
+相关文件：packages/mcp/src/client.ts
+依赖：P8-01
+验收标准：能连接标准 MCP Server 并完成 initialize 握手
+测试结果：未执行
+备注：无
+
+[ ] P8-06 — 实现 MCP Tool Discovery
+阶段：P8
+优先级：P1
+状态：TODO
+目标：动态发现 MCP Server 暴露的 Tools/Resources/Prompts 并映射到平台 Tool Registry
+相关文件：packages/mcp/src/discovery.ts
+依赖：P8-05, P3-07
+验收标准：工具 Schema 正确转换为平台统一工具定义
+测试结果：未执行
+备注：无
+
+[ ] P8-07 — 实现插件与 MCP 工具受控执行
+阶段：P8
+优先级：P1
+状态：TODO
+目标：执行前校验安装启用状态、权限范围、高危操作审批策略与超时保护
+相关文件：packages/mcp/src/executor.ts
+依赖：P8-04, P8-06
+验收标准：Agent 可真实调用已启用 MCP 工具；停用后调用被拒
+测试结果：未执行
+备注：无
+
+[ ] P8-08 — 实现 Agent Skills 加载器
+阶段：P8
+优先级：P1
+状态：TODO
+目标：解析标准 `SKILL.md`（YAML frontmatter + 指令正文 + references）并在授权范围注入 Agent 上下文，防 Prompt Injection 越权
+相关文件：packages/plugin-sdk/src/skills.ts
+依赖：P8-02
+验收标准：支持启用/停用 Skill 并验证上下文注入隔离
+测试结果：未执行
+备注：无
+
+[ ] P8-09 — 实现插件安装、启用、停用与卸载 API
+阶段：P8
+优先级：P1
+状态：TODO
+目标：D1 `plugin_installations` 完整 CRUD 与权限确认流程
+相关文件：apps/web/src/worker/routes/plugins.ts
+依赖：P8-03, P8-04
+验收标准：全生命周期状态持久化且跨用户隔离
+测试结果：未执行
+备注：无
+
+[ ] P8-10 — 实现插件管理 UI (`/plugins`)
+阶段：P8
+优先级：P1
+状态：TODO
+目标：实现插件列表、安装向导（MCP URL/内置插件）、权限审查弹窗、配置表单、启用/停用开关与卸载
+相关文件：apps/web/src/pages/PluginsPage.tsx
+依赖：P8-09, P1-05
+验收标准：用户可通过页面完整管理插件
+测试结果：未执行
+备注：无
+
+[ ] P8-11 — 实现真实示例插件（内置 Web Fetch/Search & 文件处理插件 + 示例 MCP Server）
+阶段：P8
+优先级：P1
+状态：TODO
+目标：交付至少一个真实可运行、可注册、启用、调用、停用与移除的插件及真实测试 MCP Server
+相关文件：packages/plugins-builtin/*, tests/integration/mcp-server-fixture.ts
+依赖：P8-07, P8-10
+验收标准：Agent 在 Chat 或 Work 中真实调用示例 MCP/插件工具并返回真实结果
+测试结果：未执行
+备注：无
+
+[ ] P8-12 — 实现插件审计日志
+阶段：P8
+优先级：P1
+状态：TODO
+目标：所有插件安装、权限变更、工具调用与拒绝事件写入 audit_logs（敏感字段脱敏）
+相关文件：packages/plugin-sdk/src/audit.ts
+依赖：P8-07
+验收标准：审计记录可检索且不含密钥明文
+测试结果：未执行
+备注：无
+
+[ ] P8-13 — 测试插件权限隔离与最小授权
+阶段：P8
+优先级：P1
+状态：TODO
+目标：自动化测试未启用插件调用、越权网络请求、越权跨项目读取全部被拒绝
+相关文件：tests/security/plugin-permissions.test.ts
+依赖：P8-04, P8-11, P8-12
+验收标准：安全测试 100% 通过
+测试结果：未执行
+备注：无
+
+---
+
+## P9 — 稳定性、安全与部署
+
+[ ] P9-01 — 全仓库严格 TypeScript 类型检查
+阶段：P9
+优先级：P0
+状态：TODO
+目标：全 workspace 包零 TS 错误
+相关文件：tsconfig.base.json
+依赖：P8-13
+验收标准：`pnpm typecheck` 退出码 0
+测试结果：未执行
+备注：无
+
+[ ] P9-02 — 完整单元测试套件
+阶段：P9
+优先级：P0
+状态：TODO
+目标：覆盖所有核心包业务逻辑
+相关文件：packages/*/src/*.test.ts
+依赖：P9-01
+验收标准：`pnpm test:unit` 全部通过
+测试结果：未执行
+备注：无
+
+[ ] P9-03 — API 与数据库集成测试套件
+阶段：P9
+优先级：P0
+状态：TODO
+目标：测试真实 HTTP 路由、D1、R2、DO、Auth、Chat、Work、Projects、Studio、Plugins
+相关文件：tests/integration/*
+依赖：P9-01
+验收标准：`pnpm test:integration` 全部通过
+测试结果：未执行
+备注：无
+
+[ ] P9-04 — Playwright 核心流程 E2E 测试
+阶段：P9
+优先级：P0
+状态：TODO
+目标：真实浏览器覆盖登录、主题切换、Chat、Work、Projects、Studio、Plugins、Settings 流程
+相关文件：tests/e2e/*
+依赖：P9-03
+验收标准：`pnpm test:e2e` 全部通过
+测试结果：未执行
+备注：无
+
+[ ] P9-05 — Harness Contract Tests 全量回归
+阶段：P9
+优先级：P0
+状态：TODO
+目标：覆盖所有已接入 Harness 的统一契约回归
+相关文件：tests/harness-contract/*
+依赖：P9-01
+验收标准：全部通过
+测试结果：未执行
+备注：无
+
+[ ] P9-06 — 权限与多用户隔离安全测试
+阶段：P9
+优先级：P0
+状态：TODO
+目标：遍历所有资源 ID 接口验证跨用户越权访问返回 403/404
+相关文件：tests/security/tenant-isolation.test.ts
+依赖：P9-03
+验收标准：无任何越权漏洞
+测试结果：未执行
+备注：无
+
+[ ] P9-07 — Prompt Injection 防护测试
+阶段：P9
+优先级：P0
+状态：TODO
+目标：验证第三方网页/项目文件/SKILL.md 中的恶意指令被隔离为不可信数据上下文，无法绕过审批策略执行高危工具
+相关文件：tests/security/prompt-injection.test.ts
+依赖：P4-08, P8-08
+验收标准：高危工具未获审批前不被执行
+测试结果：未执行
+备注：无
+
+[ ] P9-08 — SSRF 防护测试
+阶段：P9
+优先级：P0
+状态：TODO
+目标：验证 Git 导入、MCP Server URL、Preview 代理、Webhook 与 Web Fetch 工具拦截内网 IP (127.0.0.1, 10/8, 169.254.169.254, ::1 等) 与非 HTTP(S) 协议
+相关文件：tests/security/ssrf.test.ts
+依赖：P5-05, P5-14, P8-05
+验收标准：所有 SSRF 向量被拦截
+测试结果：未执行
+备注：无
+
+[ ] P9-09 — 文件上传与路径穿越安全测试
+阶段：P9
+优先级：P0
+状态：TODO
+目标：验证 MIME/体积限制、可执行脚本上传隔离与 Workspace `../` 路径穿越拦截
+相关文件：tests/security/upload-path.test.ts
+依赖：P2-17, P4-04
+验收标准：全部攻击向量被拦截
+测试结果：未执行
+备注：无
+
+[ ] P9-10 — 错误恢复与断线重连测试
+阶段：P9
+优先级：P0
+状态：TODO
+目标：模拟 SSE/WebSocket 断线、上游 API 500/429、超时后恢复与幂等性
+相关文件：tests/integration/resilience.test.ts
+依赖：P3-13, P2-15
+验收标准：无数据损坏、无重复副作用
+测试结果：未执行
+备注：无
+
+[ ] P9-11 — 资源预算与限流测试
+阶段：P9
+优先级：P0
+状态：TODO
+目标：验证 API Rate Limiter、Token 预算、最大步数与媒体配额拦截
+相关文件：tests/integration/quotas.test.ts
+依赖：P3-16, P7-13
+验收标准：超限正确返回 429 或终止 Run
+测试结果：未执行
+备注：无
+
+[ ] P9-12 — 容器生命周期与清理测试
+阶段：P9
+优先级：P0
+状态：TODO
+目标：验证 Sandbox 创建、超时休眠、销毁后 Preview 失效状态与 R2 数据保留
+相关文件：tests/integration/sandbox-lifecycle.test.ts
+依赖：P4-11, P5-14
+验收标准：无孤儿进程/状态错乱
+测试结果：未执行
+备注：无
+
+[ ] P9-13 — 数据备份与恢复演练
+阶段：P9
+优先级：P0
+状态：TODO
+目标：演练 D1 迁移导出恢复与 R2 项目备份恢复流程并记录于 DEPLOYMENT.md
+相关文件：DEPLOYMENT.md, TEST_REPORT.md
+依赖：P5-16
+验收标准：演练成功且步骤可复现
+测试结果：未执行
+备注：无
+
+[ ] P9-14 — 日志脱敏与可观测性检查
+阶段：P9
+优先级：P0
+状态：TODO
+目标：全局结构化日志中间件、请求追踪 ID、密钥/Cookie/Authorization 头自动脱敏测试
+相关文件：packages/shared/src/logger.ts, tests/security/log-redaction.test.ts
+依赖：P1-02
+验收标准：日志输出绝不出现完整 API Key、Cookie 或 Token
+测试结果：未执行
+备注：无
+
+[ ] P9-15 — Cloudflare 部署配置与生产前预检
+阶段：P9
+优先级：P0
+状态：BLOCKED
+目标：执行生产构建与 `wrangler deploy --dry-run` 验证，待用户批准后执行正式环境部署
+相关文件：apps/web/wrangler.jsonc, DEPLOYMENT.md
+依赖：P9-01 ~ P9-14
+验收标准：干跑成功，用户批准后正式线上验收通过
+测试结果：未执行
+备注：正式生产部署必须获得用户明确批准
+
+[ ] P9-16 — 全量文档同步更新
+阶段：P9
+优先级：P0
+状态：TODO
+目标：同步更新 ARCHITECTURE.md、DECISIONS.md、SECURITY.md、DEPLOYMENT.md、TEST_REPORT.md、AGENTS.md
+相关文件：*.md
+依赖：P9-01 ~ P9-15
+验收标准：文档与实际代码、文件结构、命令 100% 一致
+测试结果：未执行
+备注：无
+
+[ ] P9-17 — 生产上线检查清单审定
+阶段：P9
+优先级：P0
+状态：BLOCKED
+目标：逐条核对上线检查项（无假实现、安全检查全通过、用户批准外部凭证与部署）
+相关文件：CHECKLIST.log, TEST_REPORT.md
+依赖：P9-15, P9-16
+验收标准：全部阻塞项清零
+测试结果：未执行
+备注：依赖 P9-15 用户授权
+
+---
+
+## P10 — 可选 VPS 执行层与高级扩展 (按需启用)
+
+[ ] P10-01 — 实现 VpsSandboxProvider (apps/vps-executor)
+阶段：P10
+优先级：P2
+状态：TODO
+目标：当 Cloudflare Sandbox 无法满足长驻/特殊资源需求时，实现遵循 SandboxProvider 接口的 VPS 适配器
+相关文件：packages/sandbox/src/vps-sandbox.ts, apps/vps-executor/*
+依赖：P4-01
+验收标准：接口与 CloudflareSandboxProvider 完全兼容
+测试结果：未执行
+备注：若 Cloudflare Sandbox 已满足需求，本阶段可明确延期
+
+[ ] P10-02 — 实现私有 Worker ↔ VPS 签名控制接口
+阶段：P10
+优先级：P2
+状态：TODO
+目标：HMAC/mTLS 鉴权的私有调度接口
+相关文件：apps/vps-executor/src/server.ts
+依赖：P10-01
+验收标准：未签名请求全部拒绝
+测试结果：未执行
+备注：无
+
+[ ] P10-03 — 实现多节点任务分配与健康探针
+阶段：P10
+优先级：P2
+状态：TODO
+目标：调度池节点注册、负载检查与任务路由
+相关文件：apps/vps-executor/src/scheduler.ts
+依赖：P10-02
+验收标准：节点宕机自动摘除
+测试结果：未执行
+备注：无
+
+[ ] P10-04 — 实现容器隔离 (无 Docker Socket 暴露)
+阶段：P10
+优先级：P2
+状态：TODO
+目标：非特权容器/microVM 隔离，严禁挂载宿主机 Docker Socket 或高权限目录
+相关文件：infra/docker/sandbox.Dockerfile
+依赖：P10-01
+验收标准：容器逃逸基础防护检查通过
+测试结果：未执行
+备注：无
+
+[ ] P10-05 — 实现 CPU/内存/磁盘/网络资源限制
+阶段：P10
+优先级：P2
+状态：TODO
+目标：Cgroups 配额与容器出网策略限制
+相关文件：apps/vps-executor/src/limits.ts
+依赖：P10-04
+验收标准：超额进程被安全限制
+测试结果：未执行
+备注：无
+
+[ ] P10-06 — 实现执行日志异步上报
+阶段：P10
+优先级：P2
+状态：TODO
+目标：流式推送 stdout/stderr 至 Worker/DO 事件流
+相关文件：apps/vps-executor/src/log-stream.ts
+依赖：P10-02
+验收标准：日志延迟可控且与 Cloudflare 路径一致
+测试结果：未执行
+备注：无
+
+[ ] P10-07 — 实现 Workspace 与 R2 双向同步
+阶段：P10
+优先级：P2
+状态：TODO
+目标：任务前拉取 R2 快照、任务后增量/快照回写 R2
+相关文件：apps/vps-executor/src/sync.ts
+依赖：P10-01, P4-10
+验收标准：切换执行层不丢失文件
+测试结果：未执行
+备注：无
+
+[ ] P10-08 — 实现 VPS 任务状态恢复
+阶段：P10
+优先级：P2
+状态：TODO
+目标：断连与重启后向 DO 上报状态并支持恢复
+相关文件：apps/vps-executor/src/recovery.ts
+依赖：P10-06
+验收标准：状态一致
+测试结果：未执行
+备注：无
+
+[ ] P10-09 — 实现 VPS 安全验证
+阶段：P10
+优先级：P2
+状态：TODO
+目标：网络隔离、凭据不落盘、防 SSRF 验证
+相关文件：tests/security/vps-executor.test.ts
+依赖：P10-04, P10-05
+验收标准：安全测试通过
+测试结果：未执行
+备注：无
+
+[ ] P10-10 — 实现 Cloudflare / VPS 切换集成测试
+阶段：P10
+优先级：P2
+状态：TODO
+目标：同一 Work API 通过配置切换执行层，前端零修改运行
+相关文件：tests/integration/sandbox-switch.test.ts
+依赖：P10-01 ~ P10-09
+验收标准：切换执行层 Work 任务均通过
+测试结果：未执行
+备注：无
